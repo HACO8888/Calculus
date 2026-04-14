@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D 參數式人體構造圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      display: flex; flex-direction: column; height: 100vh;
+      background: #0c0c1a; color: #dde;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+    .title-bar {
+      flex: 0 0 auto; text-align: center; padding: 11px 20px;
+      background: linear-gradient(90deg,#0c0c1a 0%,#14142e 50%,#0c0c1a 100%);
+      border-bottom: 1px solid #222248; letter-spacing: 3px;
+      font-size: 1rem; font-weight: 300; color: #90b0ff; text-transform: uppercase;
+      user-select: none;
+    }
+    .title-bar span { color: #405070; font-size: 0.75rem; margin-left: 12px; letter-spacing: 2px; }
+    .main-layout { display: flex; flex: 1; min-height: 0; }
+    .canvas-panel { flex: 0 0 560px; position: relative; background: #0c0c1a; border-right: 1px solid #1e1e40; }
+    #threeCanvas { display: block; width: 100%; height: 100%; }
+    .hint { position: absolute; left: 10px; bottom: 12px; font-size: 0.62rem; color: #333360; letter-spacing: 1px; pointer-events: none; }
+    .eq-panel { flex: 1; overflow-y: auto; padding: 13px 16px; display: flex; flex-direction: column; gap: 8px; background: #0c0c1a; }
+    .eq-panel::-webkit-scrollbar { width: 5px; }
+    .eq-panel::-webkit-scrollbar-track { background: #0c0c1a; }
+    .eq-panel::-webkit-scrollbar-thumb { background: #222248; border-radius: 3px; }
+    .eq-section-title { font-size: 0.62rem; letter-spacing: 3px; text-transform: uppercase; color: #333368; margin-top: 5px; padding-bottom: 3px; border-bottom: 1px solid #161630; }
+    .eq-card { border-left: 3px solid var(--c); background: #10102a; border-radius: 0 5px 5px 0; padding: 8px 11px; transition: background .12s; }
+    .eq-card:hover { background: #16163a; }
+    .eq-label { font-size: 0.70rem; font-weight: 700; color: var(--c); margin-bottom: 4px; letter-spacing: 1px; }
+    .eq-lines { font-family: 'Courier New', monospace; font-size: 0.68rem; color: #7880b0; line-height: 1.72; white-space: pre; }
+    .eq-note { font-size: 0.60rem; color: #363658; margin-top: 3px; font-style: italic; }
+  </style>
+</head>
+<body>
+<div class="title-bar">3D 參數式人體構造圖<span>Realistic Walking Figure · Drag to rotate · Scroll to zoom</span></div>
+<div class="main-layout">
+  <div class="canvas-panel">
+    <canvas id="threeCanvas"></canvas>
+    <div class="hint">滑鼠拖曳旋轉 · 滾輪縮放</div>
+  </div>
+  <div class="eq-panel" id="eqPanel"></div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════
+//  EQUATION DATA  (16 parts, 3D parametric forms)
+// ═══════════════════════════════════════════════════════
+const EQ_DATA = [
+  { label:'① Head 頭部',        color:'#e8c090',
+    lines:['x(u,v) = 27·sin(v)·cos(u)','y(u,v) = 30·cos(v)','z(u,v) = 26·sin(v)·sin(u)','u∈[0,2π], v∈[0,π]'], note:'3D Ellipsoid · Center (0, 249, 0)' },
+  { label:'② Neck 頸部',        color:'#d4a070',
+    lines:['r(s,θ) = (10cos(θ), 34s, 13sin(θ))','s∈[0,1], θ∈[0,2π]'], note:'Parametric frustum · Base y=188' },
+  { label:'③ Chest 上軀幹',     color:'#c08060',
+    lines:['x(u,v) = 54·sin(v)·cos(u)','y(u,v) = 48·cos(v)','z(u,v) = 30·sin(v)·sin(u)'], note:'3D Ellipsoid · Center (0, 140, 0)' },
+  { label:'④ Abdomen 下軀幹',   color:'#b07050',
+    lines:['x(u,v) = 52·sin(v)·cos(u)','y(u,v) = 50·cos(v)','z(u,v) = 30·sin(v)·sin(u)'], note:'3D Ellipsoid · Center (0, 72, 0)' },
+  { label:'⑤ Upper Arm L 左上臂', color:'#FF8C69',
+    lines:['P(s,τ) = S_L + 85s · d̂(θ_L)','d̂(θ) = (0, −cosθ, sinθ)','θ_L(τ) = 0.45·sin(ωτ)','ω = 2π/1.2,  s∈[0,1]'], note:'S_L = (−55, 170, 0)' },
+  { label:'⑥ Lower Arm L 左前臂', color:'#FFAA88',
+    lines:['P(s,τ) = E_L + 70s · d̂(θ_L+δ_L)','δ_L(τ) = 0.20·sin(ωτ + π/4)'], note:'E_L = left elbow pivot (FK chain)' },
+  { label:'⑦ Hand L 左手',      color:'#FFCCAA',
+    lines:['x(u,v) = 9·sin(v)·cos(u)','y(u,v) = 12·cos(v)','z(u,v) = 7·sin(v)·sin(u)'], note:'3D Ellipsoid · Center = wrist_L' },
+  { label:'⑧ Upper Arm R 右上臂', color:'#50C8C8',
+    lines:['P(s,τ) = S_R + 85s · d̂(θ_R)','θ_R(τ) = 0.45·sin(ωτ + π)'], note:'S_R = (+55, 170, 0)' },
+  { label:'⑨ Lower Arm R 右前臂', color:'#80DEDE',
+    lines:['P(s,τ) = E_R + 70s · d̂(θ_R+δ_R)','δ_R(τ) = 0.20·sin(ωτ + π + π/4)'], note:'E_R = right elbow pivot (FK chain)' },
+  { label:'⑩ Hand R 右手',      color:'#AAEAEA',
+    lines:['x(u,v) = 9·sin(v)·cos(u)','y(u,v) = 12·cos(v)','z(u,v) = 7·sin(v)·sin(u)'], note:'3D Ellipsoid · Center = wrist_R' },
+  { label:'⑪ Upper Leg L 左大腿', color:'#FFD700',
+    lines:['P(s,τ) = H_L + 100s · d̂(α_L)','α_L(τ) = 0.50·sin(ωτ + π)'], note:'H_L = (−48, 26, 0)' },
+  { label:'⑫ Lower Leg L 左小腿', color:'#FFE860',
+    lines:['P(s,τ) = K_L + 88s · d̂(α_L+β_L)','β_L(τ) = max(0, 0.38·sin(ωτ+π+π/3))'], note:'K_L = left knee pivot (FK chain)' },
+  { label:'⑬ Foot L 左腳',      color:'#F8F060',
+    lines:['x(u,v) = 13·sin(v)·cos(u)','y(u,v) =  8·cos(v)','z(u,v) = 26·sin(v)·sin(u)'], note:'3D Ellipsoid · ankle_L + (2,−8,12)' },
+  { label:'⑭ Upper Leg R 右大腿', color:'#FF5522',
+    lines:['P(s,τ) = H_R + 100s · d̂(α_R)','α_R(τ) = 0.50·sin(ωτ)'], note:'H_R = (+48, 26, 0)' },
+  { label:'⑮ Lower Leg R 右小腿', color:'#FF7755',
+    lines:['P(s,τ) = K_R + 88s · d̂(α_R+β_R)','β_R(τ) = max(0, 0.38·sin(ωτ + π/3))'], note:'K_R = right knee pivot (FK chain)' },
+  { label:'⑯ Foot R 右腳',      color:'#FFA080',
+    lines:['x(u,v) = 13·sin(v)·cos(u)','y(u,v) =  8·cos(v)','z(u,v) = 26·sin(v)·sin(u)'], note:'3D Ellipsoid · ankle_R + (2,−8,12)' },
+];
+
+// ═══════════════════════════════════════════════════════
+//  BUILD EQUATION PANEL
+// ═══════════════════════════════════════════════════════
+(function() {
+  const panel = document.getElementById('eqPanel');
+  const secs = [
+    { title:'頭頸軀幹 · Head & Torso',  idx:[0,1,2,3] },
+    { title:'左上肢 · Left Arm',        idx:[4,5,6] },
+    { title:'右上肢 · Right Arm',       idx:[7,8,9] },
+    { title:'左下肢 · Left Leg',        idx:[10,11,12] },
+    { title:'右下肢 · Right Leg',       idx:[13,14,15] },
+  ];
+  secs.forEach(s => {
+    const t = document.createElement('div');
+    t.className = 'eq-section-title'; t.textContent = s.title;
+    panel.appendChild(t);
+    s.idx.forEach(i => {
+      const d = EQ_DATA[i];
+      const c = document.createElement('div');
+      c.className = 'eq-card'; c.style.setProperty('--c', d.color);
+      const lb = document.createElement('div'); lb.className = 'eq-label'; lb.textContent = d.label;
+      const ln = document.createElement('div'); ln.className = 'eq-lines'; ln.textContent = d.lines.join('\n');
+      c.appendChild(lb); c.appendChild(ln);
+      if (d.note) { const n = document.createElement('div'); n.className='eq-note'; n.textContent=d.note; c.appendChild(n); }
+      panel.appendChild(c);
+    });
+  });
+})();
+
+// ═══════════════════════════════════════════════════════
+//  THREE.JS SCENE
+// ═══════════════════════════════════════════════════════
+const cvs = document.getElementById('threeCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0c1a);
+scene.fog = new THREE.FogExp2(0x0c0c1a, 0.0009);
+
+const camera = new THREE.PerspectiveCamera(48, 1, 1, 3000);
+camera.position.set(60, 160, 700);
+camera.lookAt(0, 100, 0);
+
+const controls = new THREE.OrbitControls(camera, cvs);
+controls.target.set(0, 100, 0);
+controls.enableDamping = true; controls.dampingFactor = 0.07;
+controls.minDistance = 150; controls.maxDistance = 1500;
+
+function resize() {
+  const p = document.querySelector('.canvas-panel');
+  const w = p.clientWidth, h = p.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Lights ──────────────────────────────────────────────
+const ambient = new THREE.AmbientLight(0x40405a, 1.2);
+scene.add(ambient);
+
+const key = new THREE.DirectionalLight(0xfff4e0, 1.8);
+key.position.set(300, 550, 400);
+key.castShadow = true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.left = -360; key.shadow.camera.right = 360;
+key.shadow.camera.top  =  500; key.shadow.camera.bottom = -280;
+key.shadow.camera.near = 20;   key.shadow.camera.far = 1600;
+key.shadow.bias = -0.0008;
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0x6080cc, 0.5);
+fill.position.set(-350, 250, 150);
+scene.add(fill);
+
+const rim = new THREE.DirectionalLight(0xffc880, 0.4);
+rim.position.set(80, 80, -500);
+scene.add(rim);
+
+// ── Ground ──────────────────────────────────────────────
+const GROUND_Y = -195;
+const gnd = new THREE.Mesh(
+  new THREE.PlaneGeometry(1600, 1600),
+  new THREE.MeshPhongMaterial({ color: 0x090916, shininess: 4 })
+);
+gnd.rotation.x = -Math.PI/2; gnd.position.y = GROUND_Y;
+gnd.receiveShadow = true;
+scene.add(gnd);
+const grid = new THREE.GridHelper(1600, 40, 0x141430, 0x0c0c22);
+grid.position.y = GROUND_Y + 0.6;
+scene.add(grid);
+
+// ═══════════════════════════════════════════════════════
+//  MATERIALS  — unified skin palette
+// ═══════════════════════════════════════════════════════
+function skinMat(hex, shin = 22) {
+  const col = new THREE.Color(hex);
+  return new THREE.MeshPhongMaterial({
+    color: col, emissive: col.clone().multiplyScalar(0.06),
+    shininess: shin, specular: new THREE.Color(0x221108),
+  });
+}
+
+const M = {
+  head:   skinMat(0xe8c090, 18),   // face / lighter skin
+  neck:   skinMat(0xd8a878, 18),
+  chest:  skinMat(0xd09070, 16),
+  belly:  skinMat(0xc88868, 16),
+  limb:   skinMat(0xcc8868, 20),   // arms & legs
+  joint:  skinMat(0xb07250, 35),   // knees, elbows (slightly darker/glossier)
+  hand:   skinMat(0xe4b888, 18),
+  hair:   new THREE.MeshPhongMaterial({ color:0x140902, emissive:0x050200, shininess:60 }),
+  eye:    new THREE.MeshPhongMaterial({ color:0x100e1a, emissive:0x060410, shininess:200, specular:new THREE.Color(0xffffff) }),
+  eyeWht: new THREE.MeshPhongMaterial({ color:0xf6f4ee, shininess:10 }),
+  iris:   new THREE.MeshPhongMaterial({ color:0x4a3010, emissive:0x100800, shininess:120, specular:new THREE.Color(0x888888) }),
+  nose:   skinMat(0xdaac80, 10),
+  lip:    new THREE.MeshPhongMaterial({ color:0xaa5848, emissive:0x200808, shininess:50 }),
+};
+
+// ═══════════════════════════════════════════════════════
+//  GEOMETRY HELPERS
+// ═══════════════════════════════════════════════════════
+
+// Ellipsoid: sphere scaled by (rx, ry, rz)
+function mkE(rx, ry, rz, mat) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 38, 26), mat);
+  m.scale.set(rx, ry, rz); m.castShadow = true; return m;
+}
+
+// Cylinder — extends DOWNWARD from pivot (top at y=0, bottom at y=-len)
+function mkC(rTop, rBot, len, mat) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 14), mat);
+  m.position.y = -len/2; m.castShadow = true; return m;
+}
+
+// Sphere
+function mkS(r, mat) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), mat);
+  m.castShadow = true; return m;
+}
+
+// Pivot Object3D at (x,y,z)
+function piv(x, y, z) {
+  const o = new THREE.Object3D(); o.position.set(x, y, z); return o;
+}
+
+// ═══════════════════════════════════════════════════════
+//  BUILD BODY
+// ═══════════════════════════════════════════════════════
+const root = new THREE.Object3D();
+scene.add(root);
+
+// ── Two-ellipsoid torso ──────────────────────────────────
+// Chest: wide at top (shoulder level), tapers to waist
+const chest = mkE(54, 48, 30, M.chest);
+chest.position.set(0, 140, -4); root.add(chest);
+
+// Belly/hips: slightly narrower, overlaps chest
+const belly = mkE(50, 50, 28, M.belly);
+belly.position.set(0, 70, -4); root.add(belly);
+
+// ── Neck ────────────────────────────────────────────────
+const neckMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(10, 14, 34, 14), M.neck
+);
+neckMesh.position.set(0, 188 + 17, 0);  // centered at 205
+neckMesh.castShadow = true; root.add(neckMesh);
+
+// ── Head ────────────────────────────────────────────────
+const headMesh = mkE(27, 30, 26, M.head);
+headMesh.position.set(0, 249, 0); root.add(headMesh);
+
+// Hair cap (sits atop head)
+const hairMesh = mkE(27.5, 18, 27, M.hair);
+hairMesh.position.set(0, 264, -2); root.add(hairMesh);
+
+// Sideburns / hair sides
+[-1,1].forEach(sx => {
+  const side = mkE(9, 18, 8, M.hair);
+  side.position.set(sx*25, 258, 3); root.add(side);
+});
+
+// Eye whites
+[-1,1].forEach(sx => {
+  const ew = mkE(7, 5, 4, M.eyeWht);
+  ew.position.set(sx*10, 252, 24); root.add(ew);
+  const iris = mkE(4, 4, 2, M.iris);
+  iris.position.set(sx*10, 252, 26.5); root.add(iris);
+  const pupil = mkE(2.2, 2.2, 1.5, M.eye);
+  pupil.position.set(sx*10, 252, 27.5); root.add(pupil);
+  // upper eyelid shadow (slightly darker ellipsoid on top half)
+});
+
+// Nose
+const nose = mkE(5, 5.5, 5, M.nose);
+nose.position.set(0, 242, 27); root.add(nose);
+// nose tip ridge
+const noseRidge = mkE(3, 8, 3.5, M.nose);
+noseRidge.position.set(0, 246, 25); root.add(noseRidge);
+
+// Lips
+const lipU = new THREE.Mesh(new THREE.TorusGeometry(5, 2, 6, 10, Math.PI), M.lip);
+lipU.position.set(0, 236.5, 26); lipU.rotation.x = -0.3; root.add(lipU);
+const lipL = new THREE.Mesh(new THREE.TorusGeometry(4.5, 2.2, 6, 10, Math.PI), M.lip);
+lipL.position.set(0, 232, 26); lipL.rotation.x = Math.PI + 0.3; root.add(lipL);
+
+// ── Fixed joint spheres at shoulder & hip (don't rotate) ──
+// These "cap" the limb cylinders where they attach to the torso.
+[-1,1].forEach(sx => {
+  const shSph = mkS(14, M.joint);
+  shSph.position.set(sx*55, 170, 0); root.add(shSph);
+  const hipSph = mkS(15, M.joint);
+  hipSph.position.set(sx*48, 26, 0); root.add(hipSph);
+});
+
+// ── BUILD ARM ────────────────────────────────────────────
+function buildArm(side) {
+  const sx = side === 'L' ? -55 : 55;
+  const armPiv = piv(sx, 170, 0); root.add(armPiv);
+
+  // Upper arm: top r=8 (at shoulder), bottom r=7 (at elbow)
+  armPiv.add(mkC(8, 7, 85, M.limb));
+
+  // Elbow sphere — covers gap between upper & lower arm
+  const elbSph = mkS(10, M.joint);
+  elbSph.position.y = -85; armPiv.add(elbSph);
+
+  const elbowPiv = piv(0, -85, 0); armPiv.add(elbowPiv);
+
+  // Lower arm: top r=7, bottom r=5.5
+  elbowPiv.add(mkC(7, 5.5, 70, M.limb));
+
+  // Wrist sphere
+  const wrSph = mkS(7.5, M.joint);
+  wrSph.position.y = -70; elbowPiv.add(wrSph);
+
+  const wristPiv = piv(0, -70, 0); elbowPiv.add(wristPiv);
+
+  // Hand: elongated ellipsoid (slightly flattened)
+  const hand = mkE(9, 12, 7, M.hand);
+  hand.position.y = -12; wristPiv.add(hand);
+
+  return { armPiv, elbowPiv };
+}
+
+// ── BUILD LEG ────────────────────────────────────────────
+function buildLeg(side) {
+  const sx = side === 'L' ? -48 : 48;
+  const hipPiv = piv(sx, 26, 0); root.add(hipPiv);
+
+  // Upper leg: top r=11 (at hip), bottom r=9 (at knee)
+  hipPiv.add(mkC(11, 9, 100, M.limb));
+
+  // Knee sphere — covers upper leg bottom & lower leg top
+  const kneeSph = mkS(11, M.joint);
+  kneeSph.position.y = -100; hipPiv.add(kneeSph);
+
+  const kneePiv = piv(0, -100, 0); hipPiv.add(kneePiv);
+
+  // Lower leg: top r=9 (at knee), bottom r=6 (at ankle)
+  kneePiv.add(mkC(9, 6, 88, M.limb));
+
+  // Ankle sphere
+  const ankleSph = mkS(9, M.joint);
+  ankleSph.position.y = -88; kneePiv.add(ankleSph);
+
+  const anklePiv = piv(0, -88, 0); kneePiv.add(anklePiv);
+
+  // Foot: flat ellipsoid pointing forward (+Z)
+  // rx=13(width), ry=8(height), rz=26(length forward)
+  const foot = mkE(13, 8, 26, M.limb);
+  foot.position.set(2, -6, 14); anklePiv.add(foot);
+  // heel
+  const heel = mkE(10, 8, 12, M.joint);
+  heel.position.set(1, -6, -8); anklePiv.add(heel);
+
+  return { hipPiv, kneePiv };
+}
+
+const armL = buildArm('L');
+const armR = buildArm('R');
+const legL = buildLeg('L');
+const legR = buildLeg('R');
+
+// ═══════════════════════════════════════════════════════
+//  PARAMETRIC WALKING EQUATIONS
+//
+//  Three.js rotation convention: positive rotation.x = backward swing
+//  Our forward convention: θ > 0 means forward (+Z)
+//  → pivot.rotation.x = -θ
+// ═══════════════════════════════════════════════════════
+const T_STRIDE = 1.2;                       // seconds per stride
+const OMEGA    = 2 * Math.PI / T_STRIDE;    // ≈ 5.236 rad/s
+
+function updatePose(tau) {
+  const o = OMEGA * tau;
+
+  // ── ARMS ─────────────────────────────────────────────
+  // θ_L(τ) = 0.45·sin(ωτ)
+  const th_UAL = 0.45 * Math.sin(o);
+  // θ_R(τ) = 0.45·sin(ωτ+π)  [counter-phase = natural gait]
+  const th_UAR = 0.45 * Math.sin(o + Math.PI);
+  armL.armPiv.rotation.x   = -th_UAL;
+  armR.armPiv.rotation.x   = -th_UAR;
+  // forearm: δ(τ) = 0.20·sin(ωτ+π/4)  [slight lag behind upper arm]
+  armL.elbowPiv.rotation.x = -0.20 * Math.sin(o + Math.PI/4);
+  armR.elbowPiv.rotation.x = -0.20 * Math.sin(o + Math.PI + Math.PI/4);
+
+  // ── LEGS ──────────────────────────────────────────────
+  // α_L(τ) = 0.50·sin(ωτ+π)   [left leg: same phase as right arm]
+  const al_L = 0.50 * Math.sin(o + Math.PI);
+  const al_R = 0.50 * Math.sin(o);
+  legL.hipPiv.rotation.x = -al_L;
+  legR.hipPiv.rotation.x = -al_R;
+
+  // β(τ) = max(0, 0.38·sin(ωτ+π+π/3))  [knee flexion, never hyperextend]
+  const beta_L = Math.max(0, 0.38 * Math.sin(o + Math.PI + Math.PI/3));
+  const beta_R = Math.max(0, 0.38 * Math.sin(o + Math.PI/3));
+  // Knee bends backward relative to upper leg (+rotation.x = backward)
+  legL.kneePiv.rotation.x = beta_L;
+  legR.kneePiv.rotation.x = beta_R;
+
+  // ── VERTICAL BOB  3·|sin(2ωτ)| − 1.5  [mild heel-strike rise] ──
+  root.position.y = 3 * Math.abs(Math.sin(2 * OMEGA * tau)) - 1.5;
+}
+
+// ═══════════════════════════════════════════════════════
+//  ANIMATION LOOP
+// ═══════════════════════════════════════════════════════
+let t0 = null;
+function animate(ts) {
+  requestAnimationFrame(animate);
+  if (!t0) t0 = ts;
+  updatePose((ts - t0) / 1000);
+  controls.update();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
