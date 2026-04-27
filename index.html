@@ -1,433 +1,1294 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D 參數式人體構造圖</title>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      display: flex; flex-direction: column; height: 100vh;
-      background: #0c0c1a; color: #dde;
-      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
-    }
-    .title-bar {
-      flex: 0 0 auto; text-align: center; padding: 11px 20px;
-      background: linear-gradient(90deg,#0c0c1a 0%,#14142e 50%,#0c0c1a 100%);
-      border-bottom: 1px solid #222248; letter-spacing: 3px;
-      font-size: 1rem; font-weight: 300; color: #90b0ff; text-transform: uppercase;
-      user-select: none;
-    }
-    .title-bar span { color: #405070; font-size: 0.75rem; margin-left: 12px; letter-spacing: 2px; }
-    .main-layout { display: flex; flex: 1; min-height: 0; }
-    .canvas-panel { flex: 0 0 560px; position: relative; background: #0c0c1a; border-right: 1px solid #1e1e40; }
-    #threeCanvas { display: block; width: 100%; height: 100%; }
-    .hint { position: absolute; left: 10px; bottom: 12px; font-size: 0.62rem; color: #333360; letter-spacing: 1px; pointer-events: none; }
-    .eq-panel { flex: 1; overflow-y: auto; padding: 13px 16px; display: flex; flex-direction: column; gap: 8px; background: #0c0c1a; }
-    .eq-panel::-webkit-scrollbar { width: 5px; }
-    .eq-panel::-webkit-scrollbar-track { background: #0c0c1a; }
-    .eq-panel::-webkit-scrollbar-thumb { background: #222248; border-radius: 3px; }
-    .eq-section-title { font-size: 0.62rem; letter-spacing: 3px; text-transform: uppercase; color: #333368; margin-top: 5px; padding-bottom: 3px; border-bottom: 1px solid #161630; }
-    .eq-card { border-left: 3px solid var(--c); background: #10102a; border-radius: 0 5px 5px 0; padding: 8px 11px; transition: background .12s; }
-    .eq-card:hover { background: #16163a; }
-    .eq-label { font-size: 0.70rem; font-weight: 700; color: var(--c); margin-bottom: 4px; letter-spacing: 1px; }
-    .eq-lines { font-family: 'Courier New', monospace; font-size: 0.68rem; color: #7880b0; line-height: 1.72; white-space: pre; }
-    .eq-note { font-size: 0.60rem; color: #363658; margin-top: 3px; font-style: italic; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Human</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#040911; }
+  #c { display:block; width:100%; height:100%; }
+
+  #controls {
+    position:fixed; bottom:0; left:0; right:0; padding:14px 0 18px;
+    display:flex; justify-content:center; gap:8px;
+    background:linear-gradient(transparent, #040911ee);
+    pointer-events:none;
+  }
+  .btn {
+    padding:9px 22px; border:1px solid #00ffaa33;
+    background:transparent; color:#00ffaa66;
+    font-family:'Courier New',monospace; font-size:11px;
+    letter-spacing:2px; text-transform:uppercase;
+    cursor:pointer; transition:.2s; pointer-events:all;
+  }
+  .btn:hover { border-color:#00ffaa88; color:#00ffaacc; background:#00ffaa0a; }
+  .btn.active { border-color:#00ffaa; color:#00ffaa; background:#00ffaa18; }
+
+  #label {
+    position:fixed; top:16px; right:16px;
+    font-family:'Courier New',monospace; font-size:10px;
+    letter-spacing:3px; color:#00ffaa88;
+  }
+  #hint {
+    position:fixed; top:16px; left:16px;
+    font-family:'Courier New',monospace; font-size:10px;
+    line-height:2.2; color:#00ffaa44;
+  }
+
+  /* Formula panel */
+  #formulas {
+    position:fixed; top:0; left:0; bottom:0;
+    width:230px; padding:18px 14px 80px;
+    overflow-y:auto; pointer-events:none;
+    background:linear-gradient(to right, #040911ee 80%, transparent);
+  }
+  #formulas::-webkit-scrollbar { width:3px; }
+  #formulas::-webkit-scrollbar-thumb { background:#00ffaa33; border-radius:2px; }
+
+  .f-title {
+    font-family:'Courier New',monospace; font-size:9px;
+    letter-spacing:3px; color:#00ffaa; text-transform:uppercase;
+    margin-bottom:14px; padding-bottom:6px;
+    border-bottom:1px solid #00ffaa22;
+  }
+  .f-section {
+    margin-bottom:14px;
+  }
+  .f-section-name {
+    font-family:'Courier New',monospace; font-size:8px;
+    letter-spacing:2px; color:#00ffaa88; text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .f-row {
+    display:flex; align-items:baseline; gap:6px;
+    margin-bottom:5px; line-height:1.5;
+  }
+  .f-joint {
+    font-family:'Courier New',monospace; font-size:8px;
+    color:#00ffaa55; min-width:52px; flex-shrink:0;
+  }
+  .f-eq {
+    font-family:'Courier New',monospace; font-size:9px;
+    color:#00ffaacc; word-break:break-all;
+  }
+  .f-eq em {
+    color:#ffcc00cc; font-style:normal;
+  }
+  .f-divider {
+    height:1px; background:#00ffaa11; margin:10px 0;
+  }
+  .f-mode-block {
+    margin-bottom:4px;
+    border-left: 2px solid #00ffaa11;
+    padding-left: 8px;
+    transition: border-color .2s;
+  }
+  .f-mode-block.active {
+    border-left-color: #00ffaa;
+  }
+  .f-mode-block.active .f-title {
+    color: #00ffaa;
+  }
+  .f-mode-block:not(.active) .f-title {
+    color: #00ffaa44;
+  }
+  .f-mode-block:not(.active) .f-section-name {
+    color: #00ffaa33;
+  }
+  .f-mode-block:not(.active) .f-joint {
+    color: #00ffaa22;
+  }
+  .f-mode-block:not(.active) .f-eq {
+    color: #00ffaa44;
+  }
+  .f-mode-block:not(.active) .f-eq em {
+    color: #ffcc0044;
+  }
+  .f-mode-sep {
+    height:1px; background:#00ffaa18; margin:10px 0 12px;
+  }
+
+  /* Character selector */
+  #char-bar {
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:8px;
+    padding:6px 10px; border:1px solid #00ffaa33;
+    background:#040911cc;
+    font-family:'Courier New',monospace;
+    z-index:5;
+  }
+  #char-bar .nav {
+    width:24px; height:24px; padding:0;
+    border:1px solid #00ffaa44; background:transparent;
+    color:#00ffaa88; cursor:pointer;
+    font-family:'Courier New',monospace; font-size:11px;
+    transition:.15s;
+  }
+  #char-bar .nav:hover { border-color:#00ffaa; color:#00ffaa; background:#00ffaa15; }
+  #char-select {
+    min-width:170px;
+    background:transparent; color:#00ffaa;
+    border:1px solid #00ffaa55;
+    font-family:'Courier New',monospace; font-size:10px;
+    letter-spacing:2px; text-transform:uppercase;
+    padding:4px 8px; cursor:pointer; outline:none;
+  }
+  #char-select option { background:#040911; color:#00ffaa; }
+  #char-index {
+    font-size:9px; letter-spacing:2px; color:#00ffaa66;
+    min-width:46px; text-align:center;
+  }
+
+  /* Scanline overlay */
+  #overlay {
+    position:fixed; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      #00000018 2px,
+      #00000018 4px
+    );
+  }
+</style>
 </head>
 <body>
-<div class="title-bar">3D 參數式人體構造圖<span>Realistic Walking Figure · Drag to rotate · Scroll to zoom</span></div>
-<div class="main-layout">
-  <div class="canvas-panel">
-    <canvas id="threeCanvas"></canvas>
-    <div class="hint">滑鼠拖曳旋轉 · 滾輪縮放</div>
-  </div>
-  <div class="eq-panel" id="eqPanel"></div>
+<canvas id="c"></canvas>
+<div id="overlay"></div>
+<div id="controls">
+  <button class="btn active" data-anim="idle">IDLE</button>
+  <button class="btn" data-anim="walk">WALK</button>
+  <button class="btn" data-anim="wave">WAVE</button>
+  <button class="btn" data-anim="dance">DANCE</button>
+  <button class="btn" data-anim="run">RUN</button>
+  <button class="btn" data-anim="break">BREAK</button>
+  <button class="btn" data-anim="sixseven">SIX SEVEN</button>
 </div>
+<div id="char-bar">
+  <button class="nav" id="char-prev">◀</button>
+  <select id="char-select"></select>
+  <button class="nav" id="char-next">▶</button>
+  <span id="char-index">01/50</span>
+</div>
+<div id="label">MODE: IDLE</div>
+<div id="hint" style="top:auto;bottom:70px;font-size:9px;">DRAG旋轉 · SCROLL縮放</div>
+<div id="formulas"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-// ═══════════════════════════════════════════════════════
-//  EQUATION DATA  (16 parts, 3D parametric forms)
-// ═══════════════════════════════════════════════════════
-const EQ_DATA = [
-  { label:'① Head 頭部',        color:'#e8c090',
-    lines:['x(u,v) = 27·sin(v)·cos(u)','y(u,v) = 30·cos(v)','z(u,v) = 26·sin(v)·sin(u)','u∈[0,2π], v∈[0,π]'], note:'3D Ellipsoid · Center (0, 249, 0)' },
-  { label:'② Neck 頸部',        color:'#d4a070',
-    lines:['r(s,θ) = (10cos(θ), 34s, 13sin(θ))','s∈[0,1], θ∈[0,2π]'], note:'Parametric frustum · Base y=188' },
-  { label:'③ Chest 上軀幹',     color:'#c08060',
-    lines:['x(u,v) = 54·sin(v)·cos(u)','y(u,v) = 48·cos(v)','z(u,v) = 30·sin(v)·sin(u)'], note:'3D Ellipsoid · Center (0, 140, 0)' },
-  { label:'④ Abdomen 下軀幹',   color:'#b07050',
-    lines:['x(u,v) = 52·sin(v)·cos(u)','y(u,v) = 50·cos(v)','z(u,v) = 30·sin(v)·sin(u)'], note:'3D Ellipsoid · Center (0, 72, 0)' },
-  { label:'⑤ Upper Arm L 左上臂', color:'#FF8C69',
-    lines:['P(s,τ) = S_L + 85s · d̂(θ_L)','d̂(θ) = (0, −cosθ, sinθ)','θ_L(τ) = 0.45·sin(ωτ)','ω = 2π/1.2,  s∈[0,1]'], note:'S_L = (−55, 170, 0)' },
-  { label:'⑥ Lower Arm L 左前臂', color:'#FFAA88',
-    lines:['P(s,τ) = E_L + 70s · d̂(θ_L+δ_L)','δ_L(τ) = 0.20·sin(ωτ + π/4)'], note:'E_L = left elbow pivot (FK chain)' },
-  { label:'⑦ Hand L 左手',      color:'#FFCCAA',
-    lines:['x(u,v) = 9·sin(v)·cos(u)','y(u,v) = 12·cos(v)','z(u,v) = 7·sin(v)·sin(u)'], note:'3D Ellipsoid · Center = wrist_L' },
-  { label:'⑧ Upper Arm R 右上臂', color:'#50C8C8',
-    lines:['P(s,τ) = S_R + 85s · d̂(θ_R)','θ_R(τ) = 0.45·sin(ωτ + π)'], note:'S_R = (+55, 170, 0)' },
-  { label:'⑨ Lower Arm R 右前臂', color:'#80DEDE',
-    lines:['P(s,τ) = E_R + 70s · d̂(θ_R+δ_R)','δ_R(τ) = 0.20·sin(ωτ + π + π/4)'], note:'E_R = right elbow pivot (FK chain)' },
-  { label:'⑩ Hand R 右手',      color:'#AAEAEA',
-    lines:['x(u,v) = 9·sin(v)·cos(u)','y(u,v) = 12·cos(v)','z(u,v) = 7·sin(v)·sin(u)'], note:'3D Ellipsoid · Center = wrist_R' },
-  { label:'⑪ Upper Leg L 左大腿', color:'#FFD700',
-    lines:['P(s,τ) = H_L + 100s · d̂(α_L)','α_L(τ) = 0.50·sin(ωτ + π)'], note:'H_L = (−48, 26, 0)' },
-  { label:'⑫ Lower Leg L 左小腿', color:'#FFE860',
-    lines:['P(s,τ) = K_L + 88s · d̂(α_L+β_L)','β_L(τ) = max(0, 0.38·sin(ωτ+π+π/3))'], note:'K_L = left knee pivot (FK chain)' },
-  { label:'⑬ Foot L 左腳',      color:'#F8F060',
-    lines:['x(u,v) = 13·sin(v)·cos(u)','y(u,v) =  8·cos(v)','z(u,v) = 26·sin(v)·sin(u)'], note:'3D Ellipsoid · ankle_L + (2,−8,12)' },
-  { label:'⑭ Upper Leg R 右大腿', color:'#FF5522',
-    lines:['P(s,τ) = H_R + 100s · d̂(α_R)','α_R(τ) = 0.50·sin(ωτ)'], note:'H_R = (+48, 26, 0)' },
-  { label:'⑮ Lower Leg R 右小腿', color:'#FF7755',
-    lines:['P(s,τ) = K_R + 88s · d̂(α_R+β_R)','β_R(τ) = max(0, 0.38·sin(ωτ + π/3))'], note:'K_R = right knee pivot (FK chain)' },
-  { label:'⑯ Foot R 右腳',      color:'#FFA080',
-    lines:['x(u,v) = 13·sin(v)·cos(u)','y(u,v) =  8·cos(v)','z(u,v) = 26·sin(v)·sin(u)'], note:'3D Ellipsoid · ankle_R + (2,−8,12)' },
-];
-
-// ═══════════════════════════════════════════════════════
-//  BUILD EQUATION PANEL
-// ═══════════════════════════════════════════════════════
-(function() {
-  const panel = document.getElementById('eqPanel');
-  const secs = [
-    { title:'頭頸軀幹 · Head & Torso',  idx:[0,1,2,3] },
-    { title:'左上肢 · Left Arm',        idx:[4,5,6] },
-    { title:'右上肢 · Right Arm',       idx:[7,8,9] },
-    { title:'左下肢 · Left Leg',        idx:[10,11,12] },
-    { title:'右下肢 · Right Leg',       idx:[13,14,15] },
-  ];
-  secs.forEach(s => {
-    const t = document.createElement('div');
-    t.className = 'eq-section-title'; t.textContent = s.title;
-    panel.appendChild(t);
-    s.idx.forEach(i => {
-      const d = EQ_DATA[i];
-      const c = document.createElement('div');
-      c.className = 'eq-card'; c.style.setProperty('--c', d.color);
-      const lb = document.createElement('div'); lb.className = 'eq-label'; lb.textContent = d.label;
-      const ln = document.createElement('div'); ln.className = 'eq-lines'; ln.textContent = d.lines.join('\n');
-      c.appendChild(lb); c.appendChild(ln);
-      if (d.note) { const n = document.createElement('div'); n.className='eq-note'; n.textContent=d.note; c.appendChild(n); }
-      panel.appendChild(c);
-    });
-  });
-})();
-
-// ═══════════════════════════════════════════════════════
-//  THREE.JS SCENE
-// ═══════════════════════════════════════════════════════
-const cvs = document.getElementById('threeCanvas');
-const renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// ─── RENDERER ───────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.outputEncoding = THREE.sRGBEncoding;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0c0c1a);
-scene.fog = new THREE.FogExp2(0x0c0c1a, 0.0009);
+scene.background = new THREE.Color(0x040911);
+scene.fog = new THREE.FogExp2(0x040911, 0.055);
 
-const camera = new THREE.PerspectiveCamera(48, 1, 1, 3000);
-camera.position.set(60, 160, 700);
-camera.lookAt(0, 100, 0);
+const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 60);
 
-const controls = new THREE.OrbitControls(camera, cvs);
-controls.target.set(0, 100, 0);
-controls.enableDamping = true; controls.dampingFactor = 0.07;
-controls.minDistance = 150; controls.maxDistance = 1500;
+// ─── LIGHTS ─────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x182840, 2.5));
 
-function resize() {
-  const p = document.querySelector('.canvas-panel');
-  const w = p.clientWidth, h = p.clientHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-resize();
-window.addEventListener('resize', resize);
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(6, 12, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 30;
+scene.add(sun);
 
-// ── Lights ──────────────────────────────────────────────
-const ambient = new THREE.AmbientLight(0x40405a, 1.2);
-scene.add(ambient);
+const cyanLight = new THREE.PointLight(0x00ffcc, 1.5, 14);
+cyanLight.position.set(-4, 5, -2);
+scene.add(cyanLight);
 
-const key = new THREE.DirectionalLight(0xfff4e0, 1.8);
-key.position.set(300, 550, 400);
-key.castShadow = true;
-key.shadow.mapSize.set(2048,2048);
-key.shadow.camera.left = -360; key.shadow.camera.right = 360;
-key.shadow.camera.top  =  500; key.shadow.camera.bottom = -280;
-key.shadow.camera.near = 20;   key.shadow.camera.far = 1600;
-key.shadow.bias = -0.0008;
-scene.add(key);
+const blueLight = new THREE.PointLight(0x0044ff, 0.8, 10);
+blueLight.position.set(5, 1, 4);
+scene.add(blueLight);
 
-const fill = new THREE.DirectionalLight(0x6080cc, 0.5);
-fill.position.set(-350, 250, 150);
-scene.add(fill);
-
-const rim = new THREE.DirectionalLight(0xffc880, 0.4);
-rim.position.set(80, 80, -500);
-scene.add(rim);
-
-// ── Ground ──────────────────────────────────────────────
-const GROUND_Y = -195;
-const gnd = new THREE.Mesh(
-  new THREE.PlaneGeometry(1600, 1600),
-  new THREE.MeshPhongMaterial({ color: 0x090916, shininess: 4 })
+// ─── FLOOR ──────────────────────────────────────────────────
+const floorMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(20, 20),
+  new THREE.MeshPhongMaterial({ color: 0x060d1a, shininess: 15 })
 );
-gnd.rotation.x = -Math.PI/2; gnd.position.y = GROUND_Y;
-gnd.receiveShadow = true;
-scene.add(gnd);
-const grid = new THREE.GridHelper(1600, 40, 0x141430, 0x0c0c22);
-grid.position.y = GROUND_Y + 0.6;
-scene.add(grid);
+floorMesh.rotation.x = -Math.PI / 2;
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+scene.add(new THREE.GridHelper(18, 36, 0x0a2030, 0x060e18));
 
-// ═══════════════════════════════════════════════════════
-//  MATERIALS  — unified skin palette
-// ═══════════════════════════════════════════════════════
-function skinMat(hex, shin = 22) {
-  const col = new THREE.Color(hex);
-  return new THREE.MeshPhongMaterial({
-    color: col, emissive: col.clone().multiplyScalar(0.06),
-    shininess: shin, specular: new THREE.Color(0x221108),
+// ─── MATERIAL HELPERS ───────────────────────────────────────
+const mkMat = (c, s=60, e=0) => new THREE.MeshPhongMaterial({ color:c, shininess:s, emissive:e });
+
+// ─── GEOMETRY HELPERS ───────────────────────────────────────
+const mkSphere = (r, mat) =>
+  new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), mat.clone());
+
+const mkCyl = (r1, r2, h, mat) =>
+  new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, 10), mat.clone());
+
+const mkBox = (w, h, d, mat) =>
+  new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat.clone());
+
+// Limb group — pivot at origin (top), limb hangs downward
+function mkLimb(len, rad, mat, jointMat) {
+  const g = new THREE.Group();
+  const cyl = mkCyl(rad * 0.82, rad, len, mat);
+  cyl.position.y = -len / 2;
+  cyl.castShadow = true;
+  g.add(cyl);
+  const j = mkSphere(rad * 1.12, jointMat);
+  j.position.y = -len;
+  g.add(j);
+  return g;
+}
+
+// ─── HAIR STYLES ────────────────────────────────────────────
+function buildHair(style, color, neckGrp) {
+  if (style === 'bald') return;
+  const mat = mkMat(color, 30);
+  switch (style) {
+    case 'short': {
+      const h = mkSphere(0.31, mat);
+      h.position.y = 0.68; h.scale.set(1.05, 0.58, 1.05); neckGrp.add(h);
+      break;
+    }
+    case 'long': {
+      const top = mkSphere(0.32, mat);
+      top.position.y = 0.66; top.scale.set(1.05, 0.7, 1.05); neckGrp.add(top);
+      const back = mkBox(0.5, 0.55, 0.16, mat);
+      back.position.set(0, 0.2, -0.2); neckGrp.add(back);
+      break;
+    }
+    case 'ponytail': {
+      const top = mkSphere(0.31, mat);
+      top.position.y = 0.68; top.scale.set(1.05, 0.55, 1.05); neckGrp.add(top);
+      const tail = mkCyl(0.07, 0.04, 0.42, mat);
+      tail.position.set(0, 0.45, -0.28);
+      tail.rotation.x = 0.25;
+      neckGrp.add(tail);
+      break;
+    }
+    case 'mohawk': {
+      const base = mkSphere(0.31, mat);
+      base.position.y = 0.66; base.scale.set(1.05, 0.3, 1.05); neckGrp.add(base);
+      const fin = mkBox(0.06, 0.26, 0.42, mat);
+      fin.position.y = 0.92; neckGrp.add(fin);
+      break;
+    }
+    case 'bun': {
+      const base = mkSphere(0.31, mat);
+      base.position.y = 0.66; base.scale.set(1.05, 0.55, 1.05); neckGrp.add(base);
+      const bun = mkSphere(0.14, mat);
+      bun.position.set(0, 0.96, 0); neckGrp.add(bun);
+      break;
+    }
+    case 'afro': {
+      const a = mkSphere(0.45, mat);
+      a.position.y = 0.74; neckGrp.add(a);
+      break;
+    }
+    case 'cap': {
+      const cap = mkSphere(0.34, mat);
+      cap.position.y = 0.72; cap.scale.set(1.0, 0.55, 1.0); neckGrp.add(cap);
+      const brim = mkBox(0.4, 0.04, 0.18, mat);
+      brim.position.set(0, 0.62, 0.22); neckGrp.add(brim);
+      break;
+    }
+    case 'spike': {
+      const base = mkSphere(0.30, mat);
+      base.position.y = 0.66; base.scale.set(1.05, 0.5, 1.05); neckGrp.add(base);
+      for (let i = -2; i <= 2; i++) {
+        const sp = mkCyl(0.04, 0.005, 0.2, mat);
+        sp.position.set(i * 0.085, 0.94, 0.0);
+        sp.rotation.z = i * 0.1;
+        neckGrp.add(sp);
+      }
+      break;
+    }
+    case 'bob': {
+      const base = mkSphere(0.33, mat);
+      base.position.y = 0.66; base.scale.set(1.1, 0.65, 1.1); neckGrp.add(base);
+      const fringe = mkBox(0.55, 0.18, 0.08, mat);
+      fringe.position.set(0, 0.5, 0.27); neckGrp.add(fringe);
+      break;
+    }
+    case 'buzz': {
+      const h = mkSphere(0.29, mat);
+      h.position.y = 0.66; h.scale.set(1.0, 0.4, 1.0); neckGrp.add(h);
+      break;
+    }
+  }
+}
+
+// ─── BUILD FIGURE ───────────────────────────────────────────
+let BASE_Y = 1.53;
+
+function buildCharacter(cfg) {
+  const skinColor   = cfg.skin;
+  const clothBlue   = cfg.shirt;
+  const clothDark   = cfg.pants;
+  const eyeColor    = cfg.eye;
+  const hairColor   = cfg.hair;
+  const panelColor  = cfg.panel;
+  const jointColor  = cfg.joint || 0x00ffcc;
+
+  const jointMat = mkMat(jointColor, 150, jointColor & 0x333333);
+  const eyeMat   = mkMat(eyeColor, 200, eyeColor & 0x222222);
+
+  const root = new THREE.Group();
+  root.position.y = BASE_Y;
+  if (cfg.scale && cfg.scale !== 1) root.scale.setScalar(cfg.scale);
+
+  // Pelvis
+  root.add(mkSphere(0.2, mkMat(clothBlue, 70)));
+
+  // Spine / upper body
+  const spine = new THREE.Group();
+  root.add(spine);
+
+  const torsoMesh = mkCyl(0.265, 0.235, 1.0, mkMat(clothBlue, 70));
+  torsoMesh.position.y = 0.5;
+  torsoMesh.castShadow = true;
+  spine.add(torsoMesh);
+
+  // Tech chest panel
+  const panel = mkBox(0.4, 0.32, 0.07, mkMat(0x001833, 200, 0x000d22));
+  panel.position.set(0, 0.62, 0.245);
+  spine.add(panel);
+
+  const glowBar = mkBox(0.35, 0.018, 0.01, mkMat(panelColor, 300, panelColor));
+  glowBar.position.set(0, 0.65, 0.278);
+  spine.add(glowBar);
+
+  // Shoulder collar bar
+  const collarBar = mkCyl(0.052, 0.052, 0.85, mkMat(clothBlue, 70));
+  collarBar.rotation.z = Math.PI / 2;
+  collarBar.position.y = 0.97;
+  spine.add(collarBar);
+
+  // Neck group
+  const neckGrp = new THREE.Group();
+  neckGrp.position.y = 1.0;
+  spine.add(neckGrp);
+
+  const neckCyl = mkCyl(0.095, 0.115, 0.19, mkMat(skinColor, 50));
+  neckCyl.position.y = 0.095;
+  neckGrp.add(neckCyl);
+
+  // Head
+  const headMesh = mkSphere(0.34, mkMat(skinColor, 50));
+  headMesh.position.y = 0.52;
+  headMesh.castShadow = true;
+  neckGrp.add(headMesh);
+
+  // Eyes
+  [-0.115, 0.115].forEach(x => {
+    const e = mkSphere(0.052, eyeMat);
+    e.position.set(x, 0.56, 0.305);
+    neckGrp.add(e);
+    const p = mkSphere(0.028, mkMat(0x000022, 300, 0x0011aa));
+    p.position.set(x, 0.56, 0.333);
+    neckGrp.add(p);
+  });
+
+  // Hair
+  buildHair(cfg.hairStyle, hairColor, neckGrp);
+
+  // Eyebrows
+  [-0.115, 0.115].forEach(x => {
+    const br = mkBox(0.085, 0.018, 0.015, mkMat(hairColor, 20));
+    br.position.set(x, 0.63, 0.338);
+    br.rotation.z = x > 0 ? 0.18 : -0.18;
+    neckGrp.add(br);
+  });
+
+  // Optional: visor accessory
+  if (cfg.accessory === 'visor') {
+    const visor = mkBox(0.42, 0.08, 0.04, mkMat(panelColor, 300, panelColor));
+    visor.position.set(0, 0.56, 0.34);
+    neckGrp.add(visor);
+  } else if (cfg.accessory === 'beard') {
+    const beard = mkBox(0.22, 0.13, 0.06, mkMat(hairColor, 20));
+    beard.position.set(0, 0.42, 0.30);
+    neckGrp.add(beard);
+  }
+
+  // ─── ARMS ─────────────────────────────────────────────────
+  const SY = 0.92, SX = 0.42;
+  const armMat = mkMat(skinColor, 50);
+
+  const rSh = new THREE.Group(); rSh.position.set(SX, SY, 0); spine.add(rSh);
+  const rUA = mkLimb(0.6, 0.098, armMat, jointMat); rSh.add(rUA);
+  const rElb = new THREE.Group(); rElb.position.y = -0.6; rUA.add(rElb);
+  const rLA = mkLimb(0.5, 0.082, armMat, jointMat); rElb.add(rLA);
+  const rHnd = mkSphere(0.09, mkMat(skinColor, 50)); rHnd.position.y = -0.5; rElb.add(rHnd);
+
+  const lSh = new THREE.Group(); lSh.position.set(-SX, SY, 0); spine.add(lSh);
+  const lUA = mkLimb(0.6, 0.098, armMat, jointMat); lSh.add(lUA);
+  const lElb = new THREE.Group(); lElb.position.y = -0.6; lUA.add(lElb);
+  const lLA = mkLimb(0.5, 0.082, armMat, jointMat); lElb.add(lLA);
+  const lHnd = mkSphere(0.09, mkMat(skinColor, 50)); lHnd.position.y = -0.5; lElb.add(lHnd);
+
+  // ─── LEGS ─────────────────────────────────────────────────
+  const HX = 0.2;
+  const legClothMat = mkMat(clothDark, 70);
+
+  const rHip = new THREE.Group(); rHip.position.set(HX, 0, 0); root.add(rHip);
+  const rUL = mkLimb(0.78, 0.125, legClothMat, jointMat); rHip.add(rUL);
+  const rKn = new THREE.Group(); rKn.position.y = -0.78; rUL.add(rKn);
+  const rLL = mkLimb(0.7, 0.1, legClothMat, jointMat); rKn.add(rLL);
+  const rAnk = new THREE.Group(); rAnk.position.y = -0.7; rLL.add(rAnk);
+  const rFoot = mkBox(0.15, 0.1, 0.3, mkMat(clothDark, 40)); rFoot.position.set(0, -0.05, 0.08); rAnk.add(rFoot);
+
+  const lHip = new THREE.Group(); lHip.position.set(-HX, 0, 0); root.add(lHip);
+  const lUL = mkLimb(0.78, 0.125, legClothMat, jointMat); lHip.add(lUL);
+  const lKn = new THREE.Group(); lKn.position.y = -0.78; lUL.add(lKn);
+  const lLL = mkLimb(0.7, 0.1, legClothMat, jointMat); lKn.add(lLL);
+  const lAnk = new THREE.Group(); lAnk.position.y = -0.7; lLL.add(lAnk);
+  const lFoot = mkBox(0.15, 0.1, 0.3, mkMat(clothDark, 40)); lFoot.position.set(0, -0.05, 0.08); lAnk.add(lFoot);
+
+  return { root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
+           rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot };
+}
+
+// ─── 50 CHARACTERS ──────────────────────────────────────────
+const SKIN_TONES = [
+  0xf2d4b8, 0xe8c5a0, 0xd9b08c, 0xd0946a, 0xc88860,
+  0xa56a40, 0x8b5a3c, 0x6b4226, 0x4a2c1a, 0xc8a8b8,
+];
+const HAIR_COLORS = [
+  0x080810, 0x4a2c1a, 0x7a4a28, 0xa67848, 0xc8a878,
+  0xe8d090, 0x8a4838, 0x483030, 0x303030, 0xb0a0a0,
+  0xff44aa, 0x00ccff, 0x88ff44,
+];
+const HAIR_STYLES = ['short','long','ponytail','mohawk','bun','bald','afro','cap','spike','bob','buzz'];
+const SHIRT_COLORS = [
+  0x1e4882, 0x882020, 0x208240, 0x806020, 0x602080,
+  0x2080a0, 0x484848, 0x903050, 0x305090, 0x60a040,
+  0xa04020, 0x004060, 0x800040, 0x506030, 0x4020a0,
+];
+const PANTS_COLORS = [
+  0x0d1828, 0x202028, 0x281818, 0x183020, 0x402020,
+  0x182838, 0x383830, 0x202820, 0x382818, 0x283018,
+];
+const PANEL_COLORS = [
+  0x00ffcc, 0xff4488, 0x88ff44, 0x4488ff, 0xffcc44,
+  0xff8800, 0x8844ff, 0x44ffaa,
+];
+const EYE_COLORS = [
+  0x00ccff, 0xff4466, 0x44ff66, 0xffcc44, 0xcc44ff,
+  0x66ccff, 0x44ffcc, 0xff8844,
+];
+const NAMES = [
+  'AURA','RAVEN','NOVA','KAI','ZARA','JET','NYX','ECHO',
+  'IRIS','VEX','LUNA','ATLAS','BLAZE','CIPHER','DELTA','ENVY',
+  'FROST','GLITCH','HEX','IRON','JADE','KILO','LYRA','MIRAGE',
+  'NEON','OMEN','PIXEL','QUARK','RIFT','SAGE','TRACE','UMBRA',
+  'VOID','WIRE','XENON','YONDER','ZENITH','AXIS','BYTE','CRUX',
+  'DRIFT','EMBER','FLUX','GHOST','HALO','INDIGO','JINX','KARMA',
+  'LOTUS','MERIDIAN'
+];
+const ACCESSORIES = ['none','none','none','visor','none','beard','none','none','none','none'];
+
+const CHARACTERS = NAMES.map((name, i) => ({
+  name,
+  skin:      SKIN_TONES[i % SKIN_TONES.length],
+  hair:      HAIR_COLORS[(i * 3) % HAIR_COLORS.length],
+  hairStyle: HAIR_STYLES[(i * 7) % HAIR_STYLES.length],
+  shirt:     SHIRT_COLORS[(i * 11) % SHIRT_COLORS.length],
+  pants:     PANTS_COLORS[(i * 13) % PANTS_COLORS.length],
+  panel:     PANEL_COLORS[(i * 5) % PANEL_COLORS.length],
+  eye:       EYE_COLORS[(i * 17) % EYE_COLORS.length],
+  joint:     PANEL_COLORS[(i * 5) % PANEL_COLORS.length],
+  accessory: ACCESSORIES[(i * 19) % ACCESSORIES.length],
+  scale:     0.88 + ((i * 37) % 100) / 100 * 0.24,  // 0.88 - 1.12
+}));
+
+// ─── Mutable references swapped on character change ────────
+let root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
+    rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot;
+let ALL_GROUPS = [];
+let _groundProbes = [];
+
+function disposeCharacter(r) {
+  r.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+      else o.material.dispose();
+    }
   });
 }
 
-const M = {
-  head:   skinMat(0xe8c090, 18),   // face / lighter skin
-  neck:   skinMat(0xd8a878, 18),
-  chest:  skinMat(0xd09070, 16),
-  belly:  skinMat(0xc88868, 16),
-  limb:   skinMat(0xcc8868, 20),   // arms & legs
-  joint:  skinMat(0xb07250, 35),   // knees, elbows (slightly darker/glossier)
-  hand:   skinMat(0xe4b888, 18),
-  hair:   new THREE.MeshPhongMaterial({ color:0x140902, emissive:0x050200, shininess:60 }),
-  eye:    new THREE.MeshPhongMaterial({ color:0x100e1a, emissive:0x060410, shininess:200, specular:new THREE.Color(0xffffff) }),
-  eyeWht: new THREE.MeshPhongMaterial({ color:0xf6f4ee, shininess:10 }),
-  iris:   new THREE.MeshPhongMaterial({ color:0x4a3010, emissive:0x100800, shininess:120, specular:new THREE.Color(0x888888) }),
-  nose:   skinMat(0xdaac80, 10),
-  lip:    new THREE.MeshPhongMaterial({ color:0xaa5848, emissive:0x200808, shininess:50 }),
-};
-
-// ═══════════════════════════════════════════════════════
-//  GEOMETRY HELPERS
-// ═══════════════════════════════════════════════════════
-
-// Ellipsoid: sphere scaled by (rx, ry, rz)
-function mkE(rx, ry, rz, mat) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 38, 26), mat);
-  m.scale.set(rx, ry, rz); m.castShadow = true; return m;
+function setCharacter(idx) {
+  const cfg = CHARACTERS[idx];
+  // Re-anchor BASE_Y so feet rest on the floor regardless of scale
+  BASE_Y = 0.04 + 1.5 * (cfg.scale || 1.0);
+  if (root) {
+    scene.remove(root);
+    disposeCharacter(root);
+  }
+  const parts = buildCharacter(cfg);
+  ({ root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
+     rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot } = parts);
+  scene.add(root);
+  ALL_GROUPS = [rSh, lSh, rElb, lElb, rHip, lHip, rKn, lKn, rAnk, lAnk, spine, neckGrp, root];
+  _groundProbes = [rFoot, lFoot, rHnd, lHnd];
 }
 
-// Cylinder — extends DOWNWARD from pivot (top at y=0, bottom at y=-len)
-function mkC(rTop, rBot, len, mat) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 14), mat);
-  m.position.y = -len/2; m.castShadow = true; return m;
+// ─── CAMERA ORBIT ───────────────────────────────────────────
+let camR = 7, camTheta = 0.2, camPhi = 0.32;
+let isDrag = false, pm = {x:0,y:0};
+
+canvas.addEventListener('mousedown', e => { isDrag=true; pm={x:e.clientX,y:e.clientY}; });
+canvas.addEventListener('touchstart', e => { isDrag=true; pm={x:e.touches[0].clientX,y:e.touches[0].clientY}; },{passive:true});
+window.addEventListener('mouseup', () => isDrag=false);
+window.addEventListener('touchend', () => isDrag=false);
+function onDrag(x,y) {
+  if(!isDrag) return;
+  camTheta -= (x-pm.x)*0.013;
+  camPhi = Math.max(0.06, Math.min(1.25, camPhi+(y-pm.y)*0.011));
+  pm={x,y};
+}
+window.addEventListener('mousemove', e => onDrag(e.clientX,e.clientY));
+window.addEventListener('touchmove', e => onDrag(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+canvas.addEventListener('wheel', e => {
+  camR = Math.max(3, Math.min(14, camR+e.deltaY*0.009));
+},{passive:true});
+
+// ─── ANIMATION SYSTEM ───────────────────────────────────────
+let mode = 'idle';
+const labelEl = document.getElementById('label');
+const formulaEl = document.getElementById('formulas');
+
+// ─── FORMULA DEFINITIONS ────────────────────────────────────
+const FORMULAS = [
+  { key:'idle', title:'IDLE', sections:[
+    { name:'Body', rows:[
+      ['y',        'BASE_Y + <em>sin</em>(0.85t) × 0.022'],
+      ['spine.z',  '<em>sin</em>(0.42t) × 0.03'],
+    ]},
+    { name:'Head', rows:[
+      ['neck.y',   '<em>sin</em>(0.3t) × 0.09'],
+      ['neck.x',   '<em>sin</em>(0.5t) × 0.04'],
+    ]},
+    { name:'Arms', rows:[
+      ['rSh.z / lSh.z', '−0.17 / +0.17'],
+      ['rElb.x',  '0.12 + <em>sin</em>(0.6t) × 0.04'],
+      ['lElb.x',  '0.12 + <em>sin</em>(0.7t) × 0.04'],
+    ]},
+    { name:'Legs', rows:[
+      ['rHip.z',  '+<em>sin</em>(0.42t) × 0.06'],
+      ['lHip.z',  '−<em>sin</em>(0.42t) × 0.06'],
+    ]},
+  ]},
+  { key:'walk', title:'WALK  ω=2.8', sections:[
+    { name:'Legs', rows:[
+      ['rHip.x',  '+<em>sin</em>(ωt) × 0.52'],
+      ['lHip.x',  '−<em>sin</em>(ωt) × 0.52'],
+      ['rKn.x',   'max(0,+<em>sin</em>(ωt)) × 0.72'],
+      ['lKn.x',   'max(0,−<em>sin</em>(ωt)) × 0.72'],
+    ]},
+    { name:'Arms', rows:[
+      ['rSh.x',   '−<em>sin</em>(ωt) × 0.27'],
+      ['lSh.x',   '+<em>sin</em>(ωt) × 0.27'],
+      ['elb.x',   '0.12'],
+    ]},
+    { name:'Body', rows:[
+      ['y',       'BASE + |<em>sin</em>(2ωt)| × 0.036'],
+      ['spine.y', '<em>sin</em>(ωt) × 0.07'],
+    ]},
+  ]},
+  { key:'wave', title:'WAVE  ω=3.5', sections:[
+    { name:'R Shoulder', rows:[
+      ['rSh.z',   '−1.52 + <em>sin</em>(ωt) × 0.22'],
+      ['rSh.x',   '0.1'],
+    ]},
+    { name:'R Elbow', rows:[
+      ['rElb.z',  '−0.35 + <em>sin</em>(ωt+0.6) × 0.18'],
+      ['rElb.x',  '0.12'],
+    ]},
+    { name:'L Arm', rows:[
+      ['lSh.z',   '+0.18'],
+      ['lElb.x',  '0.08'],
+    ]},
+    { name:'Body', rows:[
+      ['y',       'BASE + <em>sin</em>(0.85t) × 0.022'],
+      ['neck.y',  '<em>sin</em>(0.3t) × 0.09'],
+    ]},
+  ]},
+  { key:'dance', title:'DANCE  ω=4.5', sections:[
+    { name:'beat = |<em>sin</em>(ωt/2)|^0.5', rows:[]},
+    { name:'Body', rows:[
+      ['rot.y',   '<em>sin</em>(ωt/2) × 0.38'],
+      ['rot.z',   '<em>sin</em>(ωt) × 0.09'],
+      ['y',       'BASE + beat × 0.14'],
+      ['pos.x',   '<em>sin</em>(ωt/4) × 0.18'],
+      ['spine.z', '<em>sin</em>(ωt/2) × 0.14'],
+      ['spine.y', '<em>sin</em>(ωt×0.6) × 0.16'],
+      ['spine.x', '−beat × 0.12'],
+      ['neck.y',  '<em>sin</em>(ωt) × 0.25'],
+      ['neck.x',  '−beat × 0.15'],
+    ]},
+    { name:'Arms', rows:[
+      ['rSh.z',   '−0.55 + <em>sin</em>(ωt) × 0.58'],
+      ['lSh.z',   '+0.55 + <em>sin</em>(ωt+π) × 0.58'],
+      ['rSh.x',   '+<em>cos</em>(ωt) × 0.42'],
+      ['lSh.x',   '−<em>cos</em>(ωt) × 0.42'],
+      ['elb.x',   '0.7 + <em>sin</em>(1.4ωt) × 0.32'],
+      ['elb.z',   '<em>sin</em>(2ωt) × 0.22'],
+    ]},
+    { name:'Legs', rows:[
+      ['rHip.x',  '+<em>sin</em>(ωt) × 0.32'],
+      ['lHip.x',  '−<em>sin</em>(ωt) × 0.32'],
+      ['rHip.z',  '+<em>sin</em>(ωt/2+0.5) × 0.12'],
+      ['lHip.z',  '−<em>sin</em>(ωt/2+0.5) × 0.12'],
+      ['kn.x',    'max(0,<em>sin</em>(ωt+0.9)) × 0.55'],
+      ['ank.x',   '<em>sin</em>(1.5ωt) × 0.18'],
+    ]},
+  ]},
+  { key:'run', title:'RUN  ω=5.5', sections:[
+    { name:'Body', rows:[
+      ['y',       'BASE + |<em>sin</em>(2ωt)| × 0.08'],
+      ['rot.x',   '−0.1  (前傾)'],
+      ['spine.x', '−0.08'],
+      ['neck.x',  '+0.08'],
+      ['spine.y', '<em>sin</em>(ωt) × 0.1'],
+    ]},
+    { name:'Arms', rows:[
+      ['rSh.x',   '−<em>sin</em>(ωt) × 0.55'],
+      ['lSh.x',   '+<em>sin</em>(ωt) × 0.55'],
+      ['rElb.x',  '0.6 + <em>sin</em>(ωt) × 0.3'],
+      ['lElb.x',  '0.6 − <em>sin</em>(ωt) × 0.3'],
+    ]},
+    { name:'Legs', rows:[
+      ['rHip.x',  '+<em>sin</em>(ωt) × 0.72'],
+      ['lHip.x',  '−<em>sin</em>(ωt) × 0.72'],
+      ['rKn.x',   'max(0,+<em>sin</em>(ωt)) × 1.0'],
+      ['lKn.x',   'max(0,−<em>sin</em>(ωt)) × 1.0'],
+    ]},
+  ]},
+  { key:'break', title:'BREAK  [14s cycle]', sections:[
+    { name:'① Toprock  0–2.5s  ω=3.2', rows:[
+      ['beat',    '|<em>sin</em>(ωt)|'],
+      ['y',       'BASE + beat³ × 0.14'],
+      ['spine.x', '−beat × 0.18'],
+      ['spine.z', '<em>sin</em>(ωt) × 0.18'],
+      ['neck.x',  '−beat × 0.22'],
+      ['rHip.x',  '+<em>sin</em>(ωt) × 0.62'],
+      ['lHip.x',  '−<em>sin</em>(ωt) × 0.62'],
+      ['kn.x',    'max(0, ±<em>sin</em>(ωt)) × 0.85'],
+      ['rSh.z',   '−0.55+<em>sin</em>(ωt+0.3)×0.38'],
+      ['elb.z',   '<em>sin</em>(2ωt) × 0.25'],
+    ]},
+    { name:'② Windmill  2.5–6s', rows:[
+      ['θ',       'lt × 6π/3.5  (3 rot.)'],
+      ['drop',    '<em>clamp</em>(lt×6, 0,1)'],
+      ['rot.y',   'θ'],
+      ['rot.x',   'lerp(0,−0.72,drop)+<em>sin</em>(θ)×0.42'],
+      ['rot.z',   '<em>cos</em>(θ) × 0.52'],
+      ['rHip.x',  '0.4+<em>sin</em>(θ+0.15)×1.2'],
+      ['lHip.x',  '−0.2+<em>sin</em>(θ+0.15+π)×1.2'],
+      ['rSh.z',   '−0.85+<em>sin</em>(θ)×0.9'],
+      ['lSh.z',   '+0.85+<em>sin</em>(θ+π)×0.9'],
+    ]},
+    { name:'③ Headspin  6–9.5s  ω=6.5', rows:[
+      ['fi',      '<em>clamp</em>(lt×3.5, 0,1)'],
+      ['root.y',  'lerp(0.2, 1.60, fi)'],
+      ['rot.x',   'lerp(−0.72, −(π−0.22), fi)'],
+      ['rot.y',   'lt×6.5  (spin)'],
+      ['rHip.z',  '+0.65+<em>sin</em>(lt×2.8)×0.14'],
+      ['lHip.z',  '−0.65−<em>sin</em>(lt×2.8)×0.14'],
+      ['rHip.x',  '<em>sin</em>(lt×3.2+0.4)×0.28'],
+    ]},
+    { name:'④ Air Chair  9.5–11.5s', rows:[
+      ['fi',      '<em>clamp</em>(lt×3, 0,1)'],
+      ['root.y',  'lerp(1.60, 0.42, fi)'],
+      ['rot.x',   'lerp(−(π−0.22),−0.22,fi)'],
+      ['rot.z',   'lerp(0, 0.72, fi)'],
+      ['rSh.z',   'lerp(−0.52, −π×0.56, fi)'],
+      ['lSh.z',   'lerp(+0.52, −0.12, fi)'],
+      ['rHip.x',  'lerp(0.28, 1.72, fi)  ↑kick'],
+      ['lHip.x',  'lerp(−0.28,−1.2, fi)  ↓tuck'],
+      ['lKn.x',   'lerp(0.28, 1.12, fi)'],
+      ['wobble',  '<em>sin</em>(11.3t)×0.016+<em>sin</em>(7.1t)×0.009'],
+    ]},
+    { name:'⑤ Get Up  11.5–14s', rows:[
+      ['ui',      '<em>clamp</em>(lt/1.8, 0,1)'],
+      ['root.y',  'lerp(0.42, BASE+0.14, ui)'],
+      ['rot.z',   'lerp(0.72, 0, ui)'],
+      ['rSh.z',   'lerp(−π×0.56, −0.52, ui)'],
+      ['rHip.x',  'lerp(1.72, 0.1, ui)'],
+      ['blend→toprock', 'ui > 0.65'],
+    ]},
+  ]},
+  { key:'sixseven', title:'SIX SEVEN  ω=2.0', sections:[
+    { name:'Stance', rows:[
+      ['rot.x',   '−0.55  (前趴)'],
+      ['rot.y',   '<em>sin</em>(ωt×0.35) × 0.18'],
+      ['neck.x',  '0.22'],
+    ]},
+    { name:'Arms — 交替撐地 ↕', rows:[
+      ['hb',      '<em>sin</em>(2ωt)  ← ±1'],
+      ['rSh.z',   '−0.75 + hb × 0.65'],
+      ['lSh.z',   '+0.75 − hb × 0.65'],
+      ['rSh.x',   '0.28 − hb × 0.08'],
+      ['lSh.x',   '0.28 + hb × 0.08'],
+      ['rElb.x',  '0.15+max(0,−hb)×0.1'],
+      ['lElb.x',  '0.15+max(0,+hb)×0.1'],
+    ]},
+    { name:'Legs  rφ=θ  lφ=θ+2π/3', rows:[
+      ['hip.x',   '<em>sin</em>(φ) × 0.85'],
+      ['hip.y',   '+<em>cos</em>(φ) × 0.62  (sweep)'],
+      ['rHip.z',  '+<em>cos</em>(φ) × 0.40'],
+      ['lHip.z',  '−<em>cos</em>(φ) × 0.40'],
+      ['kn.x',    'max(0,−<em>sin</em>(φ−0.4))×0.95'],
+      ['ank.x',   '<em>sin</em>(φ+0.3) × 0.18'],
+    ]},
+  ]},
+];
+
+function renderFormulas(activeKey) {
+  let html = '';
+  FORMULAS.forEach(fm => {
+    const isActive = fm.key === activeKey;
+    html += `<div class="f-mode-block ${isActive ? 'active' : ''}">`;
+    html += `<div class="f-title">${fm.title}</div>`;
+    fm.sections.forEach(sec => {
+      html += `<div class="f-section">`;
+      if (sec.name) html += `<div class="f-section-name">${sec.name}</div>`;
+      sec.rows.forEach(([joint, eq]) => {
+        html += `<div class="f-row"><span class="f-joint">${joint}</span><span class="f-eq">${eq}</span></div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div><div class="f-mode-sep"></div>`;
+  });
+  formulaEl.innerHTML = html;
+  // Scroll active block into view
+  const activeEl = formulaEl.querySelector('.f-mode-block.active');
+  if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Sphere
-function mkS(r, mat) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), mat);
-  m.castShadow = true; return m;
-}
-
-// Pivot Object3D at (x,y,z)
-function piv(x, y, z) {
-  const o = new THREE.Object3D(); o.position.set(x, y, z); return o;
-}
-
-// ═══════════════════════════════════════════════════════
-//  BUILD BODY
-// ═══════════════════════════════════════════════════════
-const root = new THREE.Object3D();
-scene.add(root);
-
-// ── Two-ellipsoid torso ──────────────────────────────────
-// Chest: wide at top (shoulder level), tapers to waist
-const chest = mkE(54, 48, 30, M.chest);
-chest.position.set(0, 140, -4); root.add(chest);
-
-// Belly/hips: slightly narrower, overlaps chest
-const belly = mkE(50, 50, 28, M.belly);
-belly.position.set(0, 70, -4); root.add(belly);
-
-// ── Neck ────────────────────────────────────────────────
-const neckMesh = new THREE.Mesh(
-  new THREE.CylinderGeometry(10, 14, 34, 14), M.neck
-);
-neckMesh.position.set(0, 188 + 17, 0);  // centered at 205
-neckMesh.castShadow = true; root.add(neckMesh);
-
-// ── Head ────────────────────────────────────────────────
-const headMesh = mkE(27, 30, 26, M.head);
-headMesh.position.set(0, 249, 0); root.add(headMesh);
-
-// Hair cap (sits atop head)
-const hairMesh = mkE(27.5, 18, 27, M.hair);
-hairMesh.position.set(0, 264, -2); root.add(hairMesh);
-
-// Sideburns / hair sides
-[-1,1].forEach(sx => {
-  const side = mkE(9, 18, 8, M.hair);
-  side.position.set(sx*25, 258, 3); root.add(side);
+document.querySelectorAll('.btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.anim;
+    labelEl.textContent = 'MODE: '+mode.toUpperCase();
+    document.querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFormulas(mode);
+  });
 });
 
-// Eye whites
-[-1,1].forEach(sx => {
-  const ew = mkE(7, 5, 4, M.eyeWht);
-  ew.position.set(sx*10, 252, 24); root.add(ew);
-  const iris = mkE(4, 4, 2, M.iris);
-  iris.position.set(sx*10, 252, 26.5); root.add(iris);
-  const pupil = mkE(2.2, 2.2, 1.5, M.eye);
-  pupil.position.set(sx*10, 252, 27.5); root.add(pupil);
-  // upper eyelid shadow (slightly darker ellipsoid on top half)
+renderFormulas('idle'); // init
+
+// ─── CHARACTER SELECTOR ─────────────────────────────────────
+const charSel    = document.getElementById('char-select');
+const charPrev   = document.getElementById('char-prev');
+const charNext   = document.getElementById('char-next');
+const charIdxEl  = document.getElementById('char-index');
+let currentChar  = 0;
+
+CHARACTERS.forEach((c, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = String(i + 1).padStart(2, '0') + ' · ' + c.name;
+  charSel.appendChild(opt);
 });
 
-// Nose
-const nose = mkE(5, 5.5, 5, M.nose);
-nose.position.set(0, 242, 27); root.add(nose);
-// nose tip ridge
-const noseRidge = mkE(3, 8, 3.5, M.nose);
-noseRidge.position.set(0, 246, 25); root.add(noseRidge);
+function pickCharacter(idx) {
+  currentChar = (idx + CHARACTERS.length) % CHARACTERS.length;
+  setCharacter(currentChar);
+  charSel.value = currentChar;
+  charIdxEl.textContent = String(currentChar + 1).padStart(2, '0') + '/' + String(CHARACTERS.length).padStart(2, '0');
+}
 
-// Lips
-const lipU = new THREE.Mesh(new THREE.TorusGeometry(5, 2, 6, 10, Math.PI), M.lip);
-lipU.position.set(0, 236.5, 26); lipU.rotation.x = -0.3; root.add(lipU);
-const lipL = new THREE.Mesh(new THREE.TorusGeometry(4.5, 2.2, 6, 10, Math.PI), M.lip);
-lipL.position.set(0, 232, 26); lipL.rotation.x = Math.PI + 0.3; root.add(lipL);
-
-// ── Fixed joint spheres at shoulder & hip (don't rotate) ──
-// These "cap" the limb cylinders where they attach to the torso.
-[-1,1].forEach(sx => {
-  const shSph = mkS(14, M.joint);
-  shSph.position.set(sx*55, 170, 0); root.add(shSph);
-  const hipSph = mkS(15, M.joint);
-  hipSph.position.set(sx*48, 26, 0); root.add(hipSph);
+charSel.addEventListener('change', e => pickCharacter(parseInt(e.target.value, 10)));
+charPrev.addEventListener('click', () => pickCharacter(currentChar - 1));
+charNext.addEventListener('click', () => pickCharacter(currentChar + 1));
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  pickCharacter(currentChar - 1);
+  if (e.key === 'ArrowRight') pickCharacter(currentChar + 1);
 });
 
-// ── BUILD ARM ────────────────────────────────────────────
-function buildArm(side) {
-  const sx = side === 'L' ? -55 : 55;
-  const armPiv = piv(sx, 170, 0); root.add(armPiv);
+pickCharacter(0);
 
-  // Upper arm: top r=8 (at shoulder), bottom r=7 (at elbow)
-  armPiv.add(mkC(8, 7, 85, M.limb));
-
-  // Elbow sphere — covers gap between upper & lower arm
-  const elbSph = mkS(10, M.joint);
-  elbSph.position.y = -85; armPiv.add(elbSph);
-
-  const elbowPiv = piv(0, -85, 0); armPiv.add(elbowPiv);
-
-  // Lower arm: top r=7, bottom r=5.5
-  elbowPiv.add(mkC(7, 5.5, 70, M.limb));
-
-  // Wrist sphere
-  const wrSph = mkS(7.5, M.joint);
-  wrSph.position.y = -70; elbowPiv.add(wrSph);
-
-  const wristPiv = piv(0, -70, 0); elbowPiv.add(wristPiv);
-
-  // Hand: elongated ellipsoid (slightly flattened)
-  const hand = mkE(9, 12, 7, M.hand);
-  hand.position.y = -12; wristPiv.add(hand);
-
-  return { armPiv, elbowPiv };
+function resetPose() {
+  ALL_GROUPS.forEach(g => g.rotation.set(0,0,0));
+  root.position.set(0, BASE_Y, 0);
+  // Default arm hang
+  rSh.rotation.z = -0.17;
+  lSh.rotation.z =  0.17;
+  rElb.rotation.x = 0.1;
+  lElb.rotation.x = 0.1;
 }
 
-// ── BUILD LEG ────────────────────────────────────────────
-function buildLeg(side) {
-  const sx = side === 'L' ? -48 : 48;
-  const hipPiv = piv(sx, 26, 0); root.add(hipPiv);
-
-  // Upper leg: top r=11 (at hip), bottom r=9 (at knee)
-  hipPiv.add(mkC(11, 9, 100, M.limb));
-
-  // Knee sphere — covers upper leg bottom & lower leg top
-  const kneeSph = mkS(11, M.joint);
-  kneeSph.position.y = -100; hipPiv.add(kneeSph);
-
-  const kneePiv = piv(0, -100, 0); hipPiv.add(kneePiv);
-
-  // Lower leg: top r=9 (at knee), bottom r=6 (at ankle)
-  kneePiv.add(mkC(9, 6, 88, M.limb));
-
-  // Ankle sphere
-  const ankleSph = mkS(9, M.joint);
-  ankleSph.position.y = -88; kneePiv.add(ankleSph);
-
-  const anklePiv = piv(0, -88, 0); kneePiv.add(anklePiv);
-
-  // Foot: flat ellipsoid pointing forward (+Z)
-  // rx=13(width), ry=8(height), rz=26(length forward)
-  const foot = mkE(13, 8, 26, M.limb);
-  foot.position.set(2, -6, 14); anklePiv.add(foot);
-  // heel
-  const heel = mkE(10, 8, 12, M.joint);
-  heel.position.set(1, -6, -8); anklePiv.add(heel);
-
-  return { hipPiv, kneePiv };
+// ── Idle ──
+function animIdle(t) {
+  const b = Math.sin(t * 0.85);
+  root.position.y = BASE_Y + b * 0.022;
+  neckGrp.rotation.y = Math.sin(t * 0.3) * 0.09;
+  neckGrp.rotation.x = Math.sin(t * 0.5) * 0.04;
+  spine.rotation.z = Math.sin(t * 0.42) * 0.03;
+  // Subtle weight shift
+  rHip.rotation.z =  Math.sin(t * 0.42) * 0.06;
+  lHip.rotation.z = -Math.sin(t * 0.42) * 0.06;
+  rElb.rotation.x = 0.12 + Math.sin(t * 0.6) * 0.04;
+  lElb.rotation.x = 0.12 + Math.sin(t * 0.7) * 0.04;
 }
 
-const armL = buildArm('L');
-const armR = buildArm('R');
-const legL = buildLeg('L');
-const legR = buildLeg('R');
-
-// ═══════════════════════════════════════════════════════
-//  PARAMETRIC WALKING EQUATIONS
-//
-//  Three.js rotation convention: positive rotation.x = backward swing
-//  Our forward convention: θ > 0 means forward (+Z)
-//  → pivot.rotation.x = -θ
-// ═══════════════════════════════════════════════════════
-const T_STRIDE = 1.2;                       // seconds per stride
-const OMEGA    = 2 * Math.PI / T_STRIDE;    // ≈ 5.236 rad/s
-
-function updatePose(tau) {
-  const o = OMEGA * tau;
-
-  // ── ARMS ─────────────────────────────────────────────
-  // θ_L(τ) = 0.45·sin(ωτ)
-  const th_UAL = 0.45 * Math.sin(o);
-  // θ_R(τ) = 0.45·sin(ωτ+π)  [counter-phase = natural gait]
-  const th_UAR = 0.45 * Math.sin(o + Math.PI);
-  armL.armPiv.rotation.x   = -th_UAL;
-  armR.armPiv.rotation.x   = -th_UAR;
-  // forearm: δ(τ) = 0.20·sin(ωτ+π/4)  [slight lag behind upper arm]
-  armL.elbowPiv.rotation.x = -0.20 * Math.sin(o + Math.PI/4);
-  armR.elbowPiv.rotation.x = -0.20 * Math.sin(o + Math.PI + Math.PI/4);
-
-  // ── LEGS ──────────────────────────────────────────────
-  // α_L(τ) = 0.50·sin(ωτ+π)   [left leg: same phase as right arm]
-  const al_L = 0.50 * Math.sin(o + Math.PI);
-  const al_R = 0.50 * Math.sin(o);
-  legL.hipPiv.rotation.x = -al_L;
-  legR.hipPiv.rotation.x = -al_R;
-
-  // β(τ) = max(0, 0.38·sin(ωτ+π+π/3))  [knee flexion, never hyperextend]
-  const beta_L = Math.max(0, 0.38 * Math.sin(o + Math.PI + Math.PI/3));
-  const beta_R = Math.max(0, 0.38 * Math.sin(o + Math.PI/3));
-  // Knee bends backward relative to upper leg (+rotation.x = backward)
-  legL.kneePiv.rotation.x = beta_L;
-  legR.kneePiv.rotation.x = beta_R;
-
-  // ── VERTICAL BOB  3·|sin(2ωτ)| − 1.5  [mild heel-strike rise] ──
-  root.position.y = 3 * Math.abs(Math.sin(2 * OMEGA * tau)) - 1.5;
+// ── Walk ──
+function animWalk(t) {
+  const sp=2.8, ls=0.52, as=0.27, ks=0.72;
+  const r = Math.sin(t*sp), l = -Math.sin(t*sp);
+  rHip.rotation.x = r*ls; lHip.rotation.x = l*ls;
+  rKn.rotation.x  = Math.max(0, r)*ks; lKn.rotation.x = Math.max(0,l)*ks;
+  rSh.rotation.x = -r*as; rSh.rotation.z = -0.17;
+  lSh.rotation.x = -l*as; lSh.rotation.z =  0.17;
+  rElb.rotation.x = 0.12; lElb.rotation.x = 0.12;
+  root.position.y = BASE_Y + Math.abs(Math.sin(t*sp*2))*0.036;
+  spine.rotation.y = r * 0.07;
 }
 
-// ═══════════════════════════════════════════════════════
-//  ANIMATION LOOP
-// ═══════════════════════════════════════════════════════
-let t0 = null;
-function animate(ts) {
-  requestAnimationFrame(animate);
-  if (!t0) t0 = ts;
-  updatePose((ts - t0) / 1000);
-  controls.update();
+// ── Wave ──
+function animWave(t) {
+  animIdle(t);
+  const sp = 3.5;
+  rSh.rotation.z = -1.52 + Math.sin(t*sp)*0.22;
+  rSh.rotation.x = 0.1;
+  rElb.rotation.z = -0.35 + Math.sin(t*sp+0.6)*0.18;
+  rElb.rotation.x = 0.12;
+  lSh.rotation.z = 0.18;
+  lElb.rotation.x = 0.08;
+}
+
+// ── Dance ──
+function animDance(t) {
+  const sp = 4.5;
+  const beat = Math.pow(Math.abs(Math.sin(t * sp * 0.5)), 0.5);
+  root.rotation.y = Math.sin(t*sp*0.5)*0.38;
+  root.rotation.z = Math.sin(t*sp)*0.09;
+  root.position.y = BASE_Y + beat * 0.14;
+  root.position.x = Math.sin(t*sp*0.25)*0.18;
+  spine.rotation.z = Math.sin(t*sp*0.5)*0.14;
+  spine.rotation.y = Math.sin(t*sp*0.6)*0.16;
+  spine.rotation.x = -beat * 0.12;
+  neckGrp.rotation.y = Math.sin(t*sp)*0.25;
+  neckGrp.rotation.z = Math.sin(t*sp*1.2)*0.08;
+  neckGrp.rotation.x = -beat * 0.15;
+  rSh.rotation.z = -0.55 + Math.sin(t*sp)*0.58;
+  lSh.rotation.z =  0.55 + Math.sin(t*sp+Math.PI)*0.58;
+  rSh.rotation.x =  Math.cos(t*sp)*0.42;
+  lSh.rotation.x = -Math.cos(t*sp)*0.42;
+  rElb.rotation.x = 0.7 + Math.sin(t*sp*1.4)*0.32;
+  lElb.rotation.x = 0.7 + Math.sin(t*sp*1.4+1)*0.32;
+  rElb.rotation.z = Math.sin(t*sp*2)*0.22;
+  lElb.rotation.z = Math.sin(t*sp*2+1.2)*0.22;
+  rHip.rotation.x = Math.sin(t*sp)*0.32;
+  lHip.rotation.x = -Math.sin(t*sp)*0.32;
+  rHip.rotation.z = Math.sin(t*sp*0.5+0.5)*0.12;
+  lHip.rotation.z = -Math.sin(t*sp*0.5+0.5)*0.12;
+  rKn.rotation.x = Math.max(0, Math.sin(t*sp+0.9))*0.55;
+  lKn.rotation.x = Math.max(0, Math.sin(t*sp+0.9+Math.PI))*0.55;
+  rAnk.rotation.x = Math.sin(t*sp*1.5)*0.18;
+  lAnk.rotation.x = Math.sin(t*sp*1.5+1)*0.18;
+}
+
+// ── Run ──
+function animRun(t) {
+  const sp=5.5, ls=0.72, as=0.55, ks=1.0;
+  const r = Math.sin(t*sp), l = -Math.sin(t*sp);
+  rHip.rotation.x = r*ls; lHip.rotation.x = l*ls;
+  rKn.rotation.x  = Math.max(0, r)*ks; lKn.rotation.x = Math.max(0,l)*ks;
+  rSh.rotation.x = -r*as; rSh.rotation.z = -0.17;
+  lSh.rotation.x = -l*as; lSh.rotation.z =  0.17;
+  rElb.rotation.x = 0.6 + r*0.3;
+  lElb.rotation.x = 0.6 + l*0.3;
+  root.position.y = BASE_Y + Math.abs(Math.sin(t*sp*2))*0.08;
+  root.rotation.x = -0.1; // forward lean
+  spine.rotation.y = r * 0.1;
+  spine.rotation.x = -0.08;
+  neckGrp.rotation.x = 0.08;
+}
+
+// ── Break ──────────────────────────────────────────────────
+const ss = x => x*x*(3-2*x);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const lerp = (a,b,t) => a+(b-a)*ss(clamp01(t));
+
+// Phase 1: Toprock  (0 – 3.5s)
+function breakToprock(t, lt) {
+  const sp = 3.2;
+  const beat = Math.abs(Math.sin(t * sp)); // 0-1 on beat
+
+  // Body bounce — sharp hit on beat
+  root.position.y = BASE_Y + Math.pow(beat, 3) * 0.14;
+  root.position.x = Math.sin(t * sp * 0.5) * 0.3;
+
+  // Chest pop on beat
+  spine.rotation.x = -beat * 0.18;
+  spine.rotation.z = Math.sin(t * sp) * 0.18;
+  spine.rotation.y = Math.sin(t * sp * 0.6) * 0.22;
+
+  // Head with attitude — nods hard on beat, looks side to side
+  neckGrp.rotation.x = -beat * 0.22;
+  neckGrp.rotation.y = Math.sin(t * sp * 0.5) * 0.35;
+  neckGrp.rotation.z = Math.sin(t * sp * 0.9) * 0.08;
+
+  // Sharp cross-step footwork
+  const rs = Math.sin(t * sp), ls = -Math.sin(t * sp);
+  rHip.rotation.x =  rs * 0.62;
+  lHip.rotation.x =  ls * 0.62;
+  rHip.rotation.z =  Math.sin(t * sp * 0.5) * 0.18;
+  lHip.rotation.z = -Math.sin(t * sp * 0.5) * 0.18;
+  rKn.rotation.x  = Math.max(0,  rs) * 0.85;
+  lKn.rotation.x  = Math.max(0, -rs) * 0.85;
+  rAnk.rotation.x = Math.sin(t * sp + 0.5) * 0.2;
+  lAnk.rotation.x = Math.sin(t * sp - 0.5) * 0.2;
+
+  // Arms: sharp swings with wrist flicks
+  rSh.rotation.z = -0.55 + Math.sin(t * sp + 0.3) * 0.38;
+  lSh.rotation.z =  0.55 + Math.sin(t * sp + 0.3 + Math.PI) * 0.38;
+  rSh.rotation.x =  Math.cos(t * sp) * 0.45;
+  lSh.rotation.x = -Math.cos(t * sp) * 0.45;
+  rElb.rotation.x = 0.6 + Math.sin(t * sp * 1.8) * 0.35;
+  lElb.rotation.x = 0.6 + Math.cos(t * sp * 1.8) * 0.35;
+  // wrist pop
+  rElb.rotation.z = Math.sin(t * sp * 2) * 0.25;
+  lElb.rotation.z = Math.sin(t * sp * 2 + 1) * 0.25;
+}
+
+// Phase 2: Windmill — bigger, more dramatic  (2.5 – 6s = 3.5s)
+function breakWindmill(t, lt) {
+  const spinAngle = lt * (Math.PI * 6 / 3.5); // 3 full rotations in 3.5s
+
+  const dropIn = clamp01(lt * 6);
+  root.position.y = lerp(BASE_Y, 0.2, dropIn) + Math.abs(Math.sin(spinAngle * 0.5)) * 0.05;
+  root.position.x = Math.sin(spinAngle * 0.4) * 0.15;
+
+  root.rotation.y = spinAngle;
+  // Body rolls: strong tilt + rock as if shoulder-on-floor
+  root.rotation.x = lerp(0, -0.72, dropIn) + Math.sin(spinAngle) * 0.42;
+  root.rotation.z = Math.cos(spinAngle) * 0.52;
+
+  // LEGS: big windmill sweep — fully extended, 1.2 amplitude
+  rHip.rotation.x = 0.4  + Math.sin(spinAngle + 0.15) * 1.2;
+  lHip.rotation.x = -0.2 + Math.sin(spinAngle + 0.15 + Math.PI) * 1.2;
+  rHip.rotation.z = Math.cos(spinAngle * 0.5) * 0.78;
+  lHip.rotation.z = -Math.cos(spinAngle * 0.5) * 0.78;
+  rKn.rotation.x = 0.15 + Math.max(0, Math.sin(spinAngle + 1.1)) * 0.5;
+  lKn.rotation.x = 0.15 + Math.max(0, Math.sin(spinAngle + 1.1 + Math.PI)) * 0.5;
+  rAnk.rotation.x = Math.sin(spinAngle * 1.5) * 0.22;
+  lAnk.rotation.x = Math.sin(spinAngle * 1.5 + Math.PI) * 0.22;
+
+  // Arms: one plants on floor, one sweeps high
+  rSh.rotation.z = -0.85 + Math.sin(spinAngle) * 0.9;
+  lSh.rotation.z =  0.85 + Math.sin(spinAngle + Math.PI) * 0.9;
+  rSh.rotation.x =  Math.cos(spinAngle) * 0.62;
+  lSh.rotation.x = -Math.cos(spinAngle) * 0.62;
+  // Elbow only bends when arm is NOT planted into floor
+  rElb.rotation.x = 0.2 + Math.max(0, Math.sin(spinAngle + 0.8)) * 0.55;
+  lElb.rotation.x = 0.2 + Math.max(0, Math.sin(spinAngle + 0.8 + Math.PI)) * 0.55;
+
+  spine.rotation.x = Math.sin(spinAngle * 0.7) * 0.32;
+  spine.rotation.z = Math.cos(spinAngle) * 0.18;
+  neckGrp.rotation.y = -spinAngle * 0.25;
+  neckGrp.rotation.x = 0.12;
+}
+
+// Phase 3: Headspin  (6 – 9.5s = 3.5s)
+// Strategy: root.rotation.x ≈ -π  →  body inverted, head at floor
+// root.position.y = 1.60  →  head world-y ≈ 0.07
+// root.rotation.y = continuous spin  →  body circles around head
+function breakHeadspin(t, lt) {
+  const spinSpeed = 6.5; // rad/s — about 1 rotation/second
+  const spinAngle = lt * spinSpeed;
+  const spinIn = clamp01(lt * 3.5);
+
+  // Quick transition: crash from windmill low → invert
+  root.position.y = lerp(0.2, 1.60, spinIn);
+  root.rotation.x = lerp(-0.72, -(Math.PI - 0.22), spinIn);
+  root.rotation.y = spinAngle;
+  root.rotation.z = Math.sin(spinAngle * 0.12) * 0.05; // tiny precession wobble
+
+  // LEGS: V-spread upward  (in inverted frame local-down = world-up)
+  const spread = 0.65 + Math.sin(lt * 2.8) * 0.14;
+  rHip.rotation.z =  spread;
+  lHip.rotation.z = -spread;
+  rHip.rotation.x = Math.sin(lt * 3.2 + 0.4) * 0.28;
+  lHip.rotation.x = Math.sin(lt * 3.2 + 0.4 + Math.PI) * 0.28;
+  rKn.rotation.x = 0.28 + Math.sin(lt * 4.5) * 0.12;
+  lKn.rotation.x = 0.28 + Math.sin(lt * 4.5 + Math.PI) * 0.12;
+  rAnk.rotation.x = Math.sin(lt * 5) * 0.15;
+  lAnk.rotation.x = Math.sin(lt * 5 + 1.2) * 0.15;
+
+  // ARMS: spread for angular momentum control
+  rSh.rotation.z = -0.52 + Math.sin(spinAngle * 0.35) * 0.18;
+  lSh.rotation.z =  0.52 + Math.sin(spinAngle * 0.35 + 1.1) * 0.18;
+  rSh.rotation.x = Math.sin(spinAngle * 0.22) * 0.22;
+  lSh.rotation.x = Math.cos(spinAngle * 0.22) * 0.22;
+  rElb.rotation.x = 0.32 + Math.sin(lt * 2) * 0.1;
+  lElb.rotation.x = 0.32 + Math.sin(lt * 2 + 1) * 0.1;
+
+  // Head: trails spin slightly, slight strain tilt
+  neckGrp.rotation.y = -spinAngle * 0.04;
+  neckGrp.rotation.x = 0.08;
+  spine.rotation.z = Math.sin(spinAngle * 0.18) * 0.07;
+}
+
+// Phase 4: Air Chair Freeze  (9.5 – 11.5s = 2s)
+// Starts from headspin (inverted) and snaps into freeze
+function breakFreeze(t, lt) {
+  const fi = clamp01(lt * 3.0);
+
+  root.position.y = lerp(1.60, 0.42, fi); // come down from inverted
+  root.rotation.y = 0; // STOP spinning — freeze!
+  root.rotation.x = lerp(-(Math.PI - 0.22), -0.22, fi);
+  root.rotation.z = lerp(0, 0.72, fi);
+
+  // RIGHT arm: weight-bearing, elbow toward floor
+  rSh.rotation.z = lerp(-0.52, -Math.PI * 0.56, fi);
+  rSh.rotation.x = lerp(0.22, 0.2, fi);
+  rElb.rotation.x = lerp(0.32, 0.14, fi);
+  rElb.rotation.z = lerp(0, 0.28, fi);
+
+  // LEFT arm: dramatic counterbalance
+  lSh.rotation.z = lerp(0.52, -0.12, fi);
+  lSh.rotation.x = lerp(0.22, 0.35, fi);
+  lElb.rotation.x = lerp(0.32, 0.58, fi);
+  lElb.rotation.z = lerp(0, -0.38, fi);
+
+  // RIGHT leg: kick high
+  rHip.rotation.x = lerp(0.28, 1.72, fi);
+  rHip.rotation.z = lerp(0.65, -0.12, fi);
+  rKn.rotation.x  = lerp(0.28, 0.42, fi);
+
+  // LEFT leg: tuck behind
+  lHip.rotation.x = lerp(-0.28, -1.2, fi);
+  lHip.rotation.z = lerp(-0.65, -0.28, fi);
+  lKn.rotation.x  = lerp(0.28,  1.12, fi);
+  lAnk.rotation.x = lerp(0.15,  0.32, fi);
+
+  spine.rotation.x = lerp(0, -0.1, fi);
+  spine.rotation.z = lerp(0, -0.18, fi);
+
+  // Hold strain: micro-shake grows over time
+  const strain = clamp01((lt - 0.4) * 1.5);
+  const wobble = (Math.sin(t * 11.3) * 0.016 + Math.sin(t * 7.1) * 0.009) * strain;
+  spine.rotation.z  += wobble;
+  neckGrp.rotation.y = wobble * 3.5;
+  neckGrp.rotation.x = 0.1 + Math.sin(t * 6.5) * 0.04 * strain;
+  rSh.rotation.x    += wobble * 1.8;
+}
+
+// Phase 5: Get Up  (11.5 – 14s = 2.5s)
+function breakGetUp(t, lt) {
+  const ui = clamp01(lt / 1.8);
+
+  root.position.y = lerp(0.42, BASE_Y + 0.14, ui);
+  root.rotation.x = lerp(-0.22, 0.04, ui);
+  root.rotation.z = lerp(0.72, 0, ui);
+
+  rSh.rotation.z = lerp(-Math.PI * 0.56, -0.52, ui);
+  lSh.rotation.z = lerp(-0.12, 0.52, ui);
+  rSh.rotation.x = lerp(0.2, 0.22, ui);
+  lSh.rotation.x = lerp(0.35, 0.22, ui);
+  rElb.rotation.x = lerp(0.14, 0.55, ui);
+  lElb.rotation.x = lerp(0.58, 0.55, ui);
+
+  rHip.rotation.x = lerp(1.72,  0.1, ui);
+  lHip.rotation.x = lerp(-1.2, -0.1, ui);
+  rKn.rotation.x  = lerp(0.42,  0.08, ui);
+  lKn.rotation.x  = lerp(1.12,  0.08, ui);
+  spine.rotation.x = lerp(-0.1, -0.12, ui);
+
+  if (ui > 0.65) {
+    const b = (ui - 0.65) / 0.35;
+    const sp = 3.2, beat = Math.abs(Math.sin(t * sp));
+    root.position.y = lerp(root.position.y, BASE_Y + Math.pow(beat, 3) * 0.14, b);
+    spine.rotation.z = Math.sin(t * sp) * 0.18 * b;
+    neckGrp.rotation.x = -beat * 0.22 * b;
+    neckGrp.rotation.y = Math.sin(t * sp * 0.5) * 0.35 * b;
+  }
+}
+
+// ── Six Step / Seven Step ──
+// Defining feature: hands alternate UP and DOWN while legs circle the body.
+// Body in a low push-up / crouch stance (face toward floor).
+function animSixSeven(t) {
+  const sp = 2.0;
+  const θ  = t * sp;
+
+  // Low crouch / push-up stance — body tilts forward toward floor
+  root.rotation.x = -0.55;
+  root.rotation.y = Math.sin(θ * 0.35) * 0.18;
+  root.position.y = 0.95; // ground collision will settle this correctly
+
+  spine.rotation.x  = -0.12;
+  spine.rotation.y  = Math.sin(θ * 0.5) * 0.08;
+  neckGrp.rotation.x = 0.22;
+  neckGrp.rotation.y = Math.sin(θ * 0.4) * 0.12;
+
+  // ── THE MAIN FEATURE: hands pump UP ↕ DOWN alternately ──
+  // hb oscillates ±1 twice per leg cycle → snappy hand switch
+  const hb = Math.sin(θ * 2);
+
+  // Right arm: DOWN (–1.4) when hb=–1, UP (–0.1) when hb=+1
+  rSh.rotation.z = -0.75 + hb * 0.65;
+  rSh.rotation.x =  0.28 - hb * 0.08;
+  rElb.rotation.x = 0.15 + Math.max(0, -hb) * 0.1; // slight bend when down
+
+  // Left arm: opposite phase — DOWN when right is UP
+  lSh.rotation.z =  0.75 - hb * 0.65;
+  lSh.rotation.x =  0.28 + hb * 0.08;
+  lElb.rotation.x = 0.15 + Math.max(0, hb) * 0.1;
+
+  // ── LEGS: circle around the body ──
+  // 120° phase offset → 3 steps per half-revolution each side
+  const rφ = θ;
+  const lφ = θ + Math.PI * 2 / 3;
+
+  rHip.rotation.x =  Math.sin(rφ) * 0.85;
+  rHip.rotation.y =  Math.cos(rφ) * 0.62;
+  rHip.rotation.z =  Math.cos(rφ) * 0.40;
+  rKn.rotation.x  =  Math.max(0, -Math.sin(rφ - 0.4)) * 0.95;
+  rAnk.rotation.x =  Math.sin(rφ + 0.3) * 0.18;
+
+  lHip.rotation.x =  Math.sin(lφ) * 0.85;
+  lHip.rotation.y =  Math.cos(lφ) * 0.62;
+  lHip.rotation.z = -Math.cos(lφ) * 0.40;
+  lKn.rotation.x  =  Math.max(0, -Math.sin(lφ - 0.4)) * 0.95;
+  lAnk.rotation.x =  Math.sin(lφ + 0.3) * 0.18;
+}
+
+// ── Main break dispatcher  [14s cycle] ──
+function animBreak(t) {
+  const CYCLE = 14;
+  const cp = t % CYCLE;
+
+  if      (cp < 2.5)  breakToprock(t, cp);
+  else if (cp < 6.0)  breakWindmill(t, cp - 2.5);   // 3.5s
+  else if (cp < 9.5)  breakHeadspin(t, cp - 6.0);   // 3.5s
+  else if (cp < 11.5) breakFreeze(t, cp - 9.5);     // 2s
+  else                breakGetUp(t, cp - 11.5);      // 2.5s
+}
+
+// ─── ARM PENETRATION — SPINE-LOCAL ELLIPSOID CHECK ──────────
+// Transform forearm points into spine's LOCAL frame before checking.
+// This handles body tilts (windmill, freeze) correctly.
+// Torso shape in spine local: ellipse XZ (wider side than deep) × Y range.
+const _spineInv = new THREE.Matrix4();
+const _lv  = new THREE.Vector3(); // reusable local-space vector
+const _h3  = new THREE.Vector3(); // hand world pos
+const _e3  = new THREE.Vector3(); // elbow world pos
+const _m3  = new THREE.Vector3(); // forearm midpoint world pos
+
+// Ellipse semi-axes in spine local XZ; torso Y span
+const E_RX = 0.28, E_RZ = 0.20;  // x wider (side-to-side), z shallower (depth)
+const T_Y0 = -0.04, T_Y1 = 1.08; // bottom & top of torso in spine local
+
+function _inTorso(worldPt) {
+  _lv.copy(worldPt).applyMatrix4(_spineInv);
+  if (_lv.z > 0.12) return false; // reaching FORWARD of body is fine
+  if (_lv.y < T_Y0 || _lv.y > T_Y1) return false;
+  const ex = _lv.x / E_RX, ez = _lv.z / E_RZ;
+  return ex*ex + ez*ez < 1.0;
+}
+
+function _fixArm(hnd, elbGrp, shGrp, outwardZ) {
+  hnd.getWorldPosition(_h3);
+  elbGrp.getWorldPosition(_e3);
+  _m3.set((_h3.x+_e3.x)*.5, (_h3.y+_e3.y)*.5, (_h3.z+_e3.z)*.5);
+
+  if (_inTorso(_h3) || _inTorso(_m3) || _inTorso(_e3)) {
+    if (elbGrp.rotation.x > 0.05) {
+      // First: straighten elbow
+      elbGrp.rotation.x = Math.max(0, elbGrp.rotation.x - 0.45);
+      elbGrp.rotation.z *= 0.40;
+    } else {
+      // Elbow already straight → swing shoulder outward along z
+      shGrp.rotation.z += outwardZ * 0.22;
+    }
+    return true; // still needs checking next iteration
+  }
+  return false;
+}
+
+function clampArmsThroughBody() {
+  for (let i = 0; i < 7; i++) {
+    scene.updateMatrixWorld(true);
+    _spineInv.copy(spine.matrixWorld).invert();
+    const rP = _fixArm(rHnd, rElb, rSh, -1); // right: outward = more negative z
+    const lP = _fixArm(lHnd, lElb, lSh, +1); // left:  outward = more positive z
+    if (!rP && !lP) break; // both clear → stop early
+  }
+}
+
+
+// ─── GROUND COLLISION ───────────────────────────────────────
+// After pose is set, measure world-space Y of all extremities.
+// If anything goes underground, lift root up just enough.
+const _wp = new THREE.Vector3();
+
+function applyGroundCollision() {
+  scene.updateMatrixWorld(true);
+  let minY = Infinity;
+  _groundProbes.forEach(obj => {
+    obj.getWorldPosition(_wp);
+    if (_wp.y < minY) minY = _wp.y;
+  });
+  const FLOOR = 0.04; // tiny clearance so feet sit ON the floor
+  if (minY < FLOOR) {
+    root.position.y += (FLOOR - minY);
+  }
+}
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  const t = ts * 0.001;
+
+  resetPose();
+  switch(mode) {
+    case 'idle':  animIdle(t);  break;
+    case 'walk':  animWalk(t);  break;
+    case 'wave':  animWave(t);  break;
+    case 'dance': animDance(t); break;
+    case 'run':   animRun(t);   break;
+    case 'break':    animBreak(t);    break;
+    case 'sixseven': animSixSeven(t); break;
+  }
+
+  // Arm penetration clamp — runs after every animation
+  clampArmsThroughBody();
+
+  // Ground collision — runs after every animation
+  applyGroundCollision();
+
+  // Animated lights
+  cyanLight.intensity = 1.3 + Math.sin(t*2.3)*0.2;
+
+  // Camera
+  const cx = camR * Math.sin(camTheta) * Math.cos(camPhi);
+  const cy = camR * Math.sin(camPhi) + 2;
+  const cz = camR * Math.cos(camTheta) * Math.cos(camPhi);
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(0, 1.8, 0);
+
+  // Resize
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
   renderer.render(scene, camera);
 }
-requestAnimationFrame(animate);
+
+loop(0);
 </script>
 </body>
 </html>
