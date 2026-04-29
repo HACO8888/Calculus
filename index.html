@@ -139,6 +139,29 @@
     font-size:9px; letter-spacing:2px; color:#00ffaa66;
     min-width:46px; text-align:center;
   }
+  .char-tag {
+    font-size:9px; letter-spacing:2px; color:#00ffaa;
+    border:1px solid #00ffaa55; padding:2px 6px;
+  }
+  .char-sep { color:#00ffaa33; font-size:14px; margin:0 4px; }
+  .b-only { display:none; }
+  body.tennis-mode .b-only { display:inline-block; }
+  body.tennis-mode #char-bar { gap:6px; }
+
+  /* Tennis HUD */
+  #score {
+    position:fixed; top:60px; left:50%; transform:translateX(-50%);
+    display:none;
+    font-family:'Courier New',monospace; font-size:13px; letter-spacing:5px;
+    color:#00ffaa; background:#040911cc;
+    border:1px solid #00ffaa44; padding:6px 18px;
+    z-index:5;
+  }
+  body.tennis-mode #score { display:block; }
+  #score .shot {
+    display:block; font-size:9px; letter-spacing:3px;
+    color:#ffcc44aa; margin-top:4px;
+  }
 
   /* Scanline overlay */
   #overlay {
@@ -163,17 +186,25 @@
   <button class="btn" data-anim="dance">DANCE</button>
   <button class="btn" data-anim="run">RUN</button>
   <button class="btn" data-anim="break">BREAK</button>
-  <button class="btn" data-anim="sixseven">SIX SEVEN</button>
+  <button class="btn" data-anim="tennis">TENNIS</button>
 </div>
 <div id="char-bar">
+  <span class="char-tag">A</span>
   <button class="nav" id="char-prev">◀</button>
   <select id="char-select"></select>
   <button class="nav" id="char-next">▶</button>
   <span id="char-index">01/50</span>
+  <span class="char-sep b-only">|</span>
+  <span class="char-tag b-only">B</span>
+  <button class="nav b-only" id="char-prev-b">◀</button>
+  <select id="char-select-b" class="b-only"></select>
+  <button class="nav b-only" id="char-next-b">▶</button>
+  <span id="char-index-b" class="b-only">02/50</span>
 </div>
 <div id="label">MODE: IDLE</div>
 <div id="hint" style="top:auto;bottom:70px;font-size:9px;">DRAG旋轉 · SCROLL縮放</div>
 <div id="formulas"></div>
+<div id="score">A 0 — 0 B<span class="shot">RALLY</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -246,78 +277,80 @@ function mkLimb(len, rad, mat, jointMat) {
 }
 
 // ─── HAIR STYLES ────────────────────────────────────────────
-function buildHair(style, color, neckGrp) {
+// Y-positions are HEAD-CENTER-RELATIVE (the parent group is headPivot),
+// so a hair piece sitting on top of a head of radius 0.34 sits at y≈0.16.
+function buildHair(style, color, headPivot) {
   if (style === 'bald') return;
   const mat = mkMat(color, 30);
   switch (style) {
     case 'short': {
       const h = mkSphere(0.31, mat);
-      h.position.y = 0.68; h.scale.set(1.05, 0.58, 1.05); neckGrp.add(h);
+      h.position.y = 0.16; h.scale.set(1.05, 0.58, 1.05); headPivot.add(h);
       break;
     }
     case 'long': {
       const top = mkSphere(0.32, mat);
-      top.position.y = 0.66; top.scale.set(1.05, 0.7, 1.05); neckGrp.add(top);
+      top.position.y = 0.14; top.scale.set(1.05, 0.7, 1.05); headPivot.add(top);
       const back = mkBox(0.5, 0.55, 0.16, mat);
-      back.position.set(0, 0.2, -0.2); neckGrp.add(back);
+      back.position.set(0, -0.32, -0.2); headPivot.add(back);
       break;
     }
     case 'ponytail': {
       const top = mkSphere(0.31, mat);
-      top.position.y = 0.68; top.scale.set(1.05, 0.55, 1.05); neckGrp.add(top);
+      top.position.y = 0.16; top.scale.set(1.05, 0.55, 1.05); headPivot.add(top);
       const tail = mkCyl(0.07, 0.04, 0.42, mat);
-      tail.position.set(0, 0.45, -0.28);
+      tail.position.set(0, -0.07, -0.28);
       tail.rotation.x = 0.25;
-      neckGrp.add(tail);
+      headPivot.add(tail);
       break;
     }
     case 'mohawk': {
       const base = mkSphere(0.31, mat);
-      base.position.y = 0.66; base.scale.set(1.05, 0.3, 1.05); neckGrp.add(base);
+      base.position.y = 0.14; base.scale.set(1.05, 0.3, 1.05); headPivot.add(base);
       const fin = mkBox(0.06, 0.26, 0.42, mat);
-      fin.position.y = 0.92; neckGrp.add(fin);
+      fin.position.y = 0.40; headPivot.add(fin);
       break;
     }
     case 'bun': {
       const base = mkSphere(0.31, mat);
-      base.position.y = 0.66; base.scale.set(1.05, 0.55, 1.05); neckGrp.add(base);
+      base.position.y = 0.14; base.scale.set(1.05, 0.55, 1.05); headPivot.add(base);
       const bun = mkSphere(0.14, mat);
-      bun.position.set(0, 0.96, 0); neckGrp.add(bun);
+      bun.position.set(0, 0.44, 0); headPivot.add(bun);
       break;
     }
     case 'afro': {
       const a = mkSphere(0.45, mat);
-      a.position.y = 0.74; neckGrp.add(a);
+      a.position.y = 0.22; headPivot.add(a);
       break;
     }
     case 'cap': {
       const cap = mkSphere(0.34, mat);
-      cap.position.y = 0.72; cap.scale.set(1.0, 0.55, 1.0); neckGrp.add(cap);
+      cap.position.y = 0.20; cap.scale.set(1.0, 0.55, 1.0); headPivot.add(cap);
       const brim = mkBox(0.4, 0.04, 0.18, mat);
-      brim.position.set(0, 0.62, 0.22); neckGrp.add(brim);
+      brim.position.set(0, 0.10, 0.22); headPivot.add(brim);
       break;
     }
     case 'spike': {
       const base = mkSphere(0.30, mat);
-      base.position.y = 0.66; base.scale.set(1.05, 0.5, 1.05); neckGrp.add(base);
+      base.position.y = 0.14; base.scale.set(1.05, 0.5, 1.05); headPivot.add(base);
       for (let i = -2; i <= 2; i++) {
         const sp = mkCyl(0.04, 0.005, 0.2, mat);
-        sp.position.set(i * 0.085, 0.94, 0.0);
+        sp.position.set(i * 0.085, 0.42, 0.0);
         sp.rotation.z = i * 0.1;
-        neckGrp.add(sp);
+        headPivot.add(sp);
       }
       break;
     }
     case 'bob': {
       const base = mkSphere(0.33, mat);
-      base.position.y = 0.66; base.scale.set(1.1, 0.65, 1.1); neckGrp.add(base);
+      base.position.y = 0.14; base.scale.set(1.1, 0.65, 1.1); headPivot.add(base);
       const fringe = mkBox(0.55, 0.18, 0.08, mat);
-      fringe.position.set(0, 0.5, 0.27); neckGrp.add(fringe);
+      fringe.position.set(0, -0.02, 0.27); headPivot.add(fringe);
       break;
     }
     case 'buzz': {
       const h = mkSphere(0.29, mat);
-      h.position.y = 0.66; h.scale.set(1.0, 0.4, 1.0); neckGrp.add(h);
+      h.position.y = 0.14; h.scale.set(1.0, 0.4, 1.0); headPivot.add(h);
       break;
     }
   }
@@ -342,14 +375,15 @@ function buildCharacter(cfg) {
   root.position.y = BASE_Y;
   if (cfg.scale && cfg.scale !== 1) root.scale.setScalar(cfg.scale);
 
-  // Pelvis
-  root.add(mkSphere(0.2, mkMat(clothBlue, 70)));
+  // Pelvis (slightly larger to match wider hips)
+  root.add(mkSphere(0.22, mkMat(clothBlue, 70)));
 
   // Spine / upper body
   const spine = new THREE.Group();
   root.add(spine);
 
-  const torsoMesh = mkCyl(0.265, 0.235, 1.0, mkMat(clothBlue, 70));
+  // Torso slimmed slightly so arms don't crowd it (was 0.265/0.235)
+  const torsoMesh = mkCyl(0.245, 0.225, 1.0, mkMat(clothBlue, 70));
   torsoMesh.position.y = 0.5;
   torsoMesh.castShadow = true;
   spine.add(torsoMesh);
@@ -363,8 +397,8 @@ function buildCharacter(cfg) {
   glowBar.position.set(0, 0.65, 0.278);
   spine.add(glowBar);
 
-  // Shoulder collar bar
-  const collarBar = mkCyl(0.052, 0.052, 0.85, mkMat(clothBlue, 70));
+  // Shoulder collar bar (matches widened SX=0.50)
+  const collarBar = mkCyl(0.052, 0.052, 0.96, mkMat(clothBlue, 70));
   collarBar.rotation.z = Math.PI / 2;
   collarBar.position.y = 0.97;
   spine.add(collarBar);
@@ -378,80 +412,164 @@ function buildCharacter(cfg) {
   neckCyl.position.y = 0.095;
   neckGrp.add(neckCyl);
 
-  // Head
-  const headMesh = mkSphere(0.34, mkMat(skinColor, 50));
-  headMesh.position.y = 0.52;
-  headMesh.castShadow = true;
-  neckGrp.add(headMesh);
+  // ─── HEAD PIVOT (scaled for ~7-head proportions) ──────────
+  // Wrapping head + features in a sub-group lets us scale the entire head
+  // assembly uniformly without re-tuning every face feature position.
+  // Scale 0.79 brings head sphere from r=0.34 to effective r=0.27, taking
+  // the body from ~5 head heights to ~6.5 (closer to adult human ratio).
+  const HEAD_S = 0.79;
+  const headPivot = new THREE.Group();
+  headPivot.position.y = 0.46;          // head bottom touches neck top (0.19)
+  headPivot.scale.setScalar(HEAD_S);
+  neckGrp.add(headPivot);
 
-  // Eyes
+  // Head sphere centered at pivot origin
+  const headMesh = mkSphere(0.34, mkMat(skinColor, 50));
+  headMesh.castShadow = true;
+  headPivot.add(headMesh);
+
+  // Eyes — coords now head-relative (subtract old 0.52 offset)
   [-0.115, 0.115].forEach(x => {
     const e = mkSphere(0.052, eyeMat);
-    e.position.set(x, 0.56, 0.305);
-    neckGrp.add(e);
+    e.position.set(x, 0.04, 0.305);
+    headPivot.add(e);
     const p = mkSphere(0.028, mkMat(0x000022, 300, 0x0011aa));
-    p.position.set(x, 0.56, 0.333);
-    neckGrp.add(p);
+    p.position.set(x, 0.04, 0.333);
+    headPivot.add(p);
   });
 
-  // Hair
-  buildHair(cfg.hairStyle, hairColor, neckGrp);
+  buildHair(cfg.hairStyle, hairColor, headPivot);
 
   // Eyebrows
   [-0.115, 0.115].forEach(x => {
     const br = mkBox(0.085, 0.018, 0.015, mkMat(hairColor, 20));
-    br.position.set(x, 0.63, 0.338);
+    br.position.set(x, 0.11, 0.338);
     br.rotation.z = x > 0 ? 0.18 : -0.18;
-    neckGrp.add(br);
+    headPivot.add(br);
   });
 
-  // Optional: visor accessory
   if (cfg.accessory === 'visor') {
     const visor = mkBox(0.42, 0.08, 0.04, mkMat(panelColor, 300, panelColor));
-    visor.position.set(0, 0.56, 0.34);
-    neckGrp.add(visor);
+    visor.position.set(0, 0.04, 0.34);
+    headPivot.add(visor);
   } else if (cfg.accessory === 'beard') {
     const beard = mkBox(0.22, 0.13, 0.06, mkMat(hairColor, 20));
-    beard.position.set(0, 0.42, 0.30);
-    neckGrp.add(beard);
+    beard.position.set(0, -0.10, 0.30);
+    headPivot.add(beard);
   }
 
   // ─── ARMS ─────────────────────────────────────────────────
-  const SY = 0.92, SX = 0.42;
+  // SX = 0.50 (≈ 1/4 body height per Vitruvian); leaves >12cm gap from
+  // torso outer (0.245) for the forearm cylinder (radius 0.082) to swing
+  // without ever penetrating the chest.
+  const SY = 0.92, SX = 0.50;
   const armMat = mkMat(skinColor, 50);
 
+  // Limb lengths chosen so total height ≈ 6.5 head heights (head r=0.27 effective).
+  // Upper arm 0.66 + forearm 0.55 ≈ 0.32 of body height — matches anatomical ratio.
+  const UA_LEN = 0.66, FA_LEN = 0.55;
+
   const rSh = new THREE.Group(); rSh.position.set(SX, SY, 0); spine.add(rSh);
-  const rUA = mkLimb(0.6, 0.098, armMat, jointMat); rSh.add(rUA);
-  const rElb = new THREE.Group(); rElb.position.y = -0.6; rUA.add(rElb);
-  const rLA = mkLimb(0.5, 0.082, armMat, jointMat); rElb.add(rLA);
-  const rHnd = mkSphere(0.09, mkMat(skinColor, 50)); rHnd.position.y = -0.5; rElb.add(rHnd);
+  const rUA = mkLimb(UA_LEN, 0.098, armMat, jointMat); rSh.add(rUA);
+  const rElb = new THREE.Group(); rElb.position.y = -UA_LEN; rUA.add(rElb);
+  const rLA = mkLimb(FA_LEN, 0.082, armMat, jointMat); rElb.add(rLA);
+  const rHnd = mkSphere(0.09, mkMat(skinColor, 50)); rHnd.position.y = -FA_LEN; rElb.add(rHnd);
 
   const lSh = new THREE.Group(); lSh.position.set(-SX, SY, 0); spine.add(lSh);
-  const lUA = mkLimb(0.6, 0.098, armMat, jointMat); lSh.add(lUA);
-  const lElb = new THREE.Group(); lElb.position.y = -0.6; lUA.add(lElb);
-  const lLA = mkLimb(0.5, 0.082, armMat, jointMat); lElb.add(lLA);
-  const lHnd = mkSphere(0.09, mkMat(skinColor, 50)); lHnd.position.y = -0.5; lElb.add(lHnd);
+  const lUA = mkLimb(UA_LEN, 0.098, armMat, jointMat); lSh.add(lUA);
+  const lElb = new THREE.Group(); lElb.position.y = -UA_LEN; lUA.add(lElb);
+  const lLA = mkLimb(FA_LEN, 0.082, armMat, jointMat); lElb.add(lLA);
+  const lHnd = mkSphere(0.09, mkMat(skinColor, 50)); lHnd.position.y = -FA_LEN; lElb.add(lHnd);
+
+  // ─── TENNIS RACKET (hidden until tennis mode) ─────────────
+  const racket = buildRacket();
+  racket.visible = false;
+  rHnd.add(racket);
 
   // ─── LEGS ─────────────────────────────────────────────────
-  const HX = 0.2;
+  // HX = 0.28 (≈ 1/5 body height per anthropometric data); inner edges
+  // of the thighs (radius 0.125) sit ~0.16 apart so the legs are clearly
+  // separate at any pose.
+  const HX = 0.28;
   const legClothMat = mkMat(clothDark, 70);
 
+  // Leg lengths chosen so the leg ≈ 50% of body height (Vitruvian).
+  const UL_LEN = 0.85, LL_LEN = 0.80;
+
   const rHip = new THREE.Group(); rHip.position.set(HX, 0, 0); root.add(rHip);
-  const rUL = mkLimb(0.78, 0.125, legClothMat, jointMat); rHip.add(rUL);
-  const rKn = new THREE.Group(); rKn.position.y = -0.78; rUL.add(rKn);
-  const rLL = mkLimb(0.7, 0.1, legClothMat, jointMat); rKn.add(rLL);
-  const rAnk = new THREE.Group(); rAnk.position.y = -0.7; rLL.add(rAnk);
+  const rUL = mkLimb(UL_LEN, 0.125, legClothMat, jointMat); rHip.add(rUL);
+  const rKn = new THREE.Group(); rKn.position.y = -UL_LEN; rUL.add(rKn);
+  const rLL = mkLimb(LL_LEN, 0.1, legClothMat, jointMat); rKn.add(rLL);
+  const rAnk = new THREE.Group(); rAnk.position.y = -LL_LEN; rLL.add(rAnk);
   const rFoot = mkBox(0.15, 0.1, 0.3, mkMat(clothDark, 40)); rFoot.position.set(0, -0.05, 0.08); rAnk.add(rFoot);
 
   const lHip = new THREE.Group(); lHip.position.set(-HX, 0, 0); root.add(lHip);
-  const lUL = mkLimb(0.78, 0.125, legClothMat, jointMat); lHip.add(lUL);
-  const lKn = new THREE.Group(); lKn.position.y = -0.78; lUL.add(lKn);
-  const lLL = mkLimb(0.7, 0.1, legClothMat, jointMat); lKn.add(lLL);
-  const lAnk = new THREE.Group(); lAnk.position.y = -0.7; lLL.add(lAnk);
+  const lUL = mkLimb(UL_LEN, 0.125, legClothMat, jointMat); lHip.add(lUL);
+  const lKn = new THREE.Group(); lKn.position.y = -UL_LEN; lUL.add(lKn);
+  const lLL = mkLimb(LL_LEN, 0.1, legClothMat, jointMat); lKn.add(lLL);
+  const lAnk = new THREE.Group(); lAnk.position.y = -LL_LEN; lLL.add(lAnk);
   const lFoot = mkBox(0.15, 0.1, 0.3, mkMat(clothDark, 40)); lFoot.position.set(0, -0.05, 0.08); lAnk.add(lFoot);
 
   return { root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
-           rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot };
+           rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot, racket };
+}
+
+// ─── TENNIS RACKET BUILDER ──────────────────────────────────
+function buildRacket() {
+  const g = new THREE.Group();
+  const frameMat  = mkMat(0x222226, 100);
+  const gripMat   = mkMat(0x101010, 60);
+  const stringMat = mkMat(0xeeeeee, 50);
+  const accentMat = mkMat(0x00ffaa, 200, 0x004433);
+
+  // Grip (black wrap)
+  const grip = mkCyl(0.028, 0.028, 0.18, gripMat);
+  grip.position.y = -0.13;
+  g.add(grip);
+
+  // Shaft accent ring
+  const accent = mkCyl(0.030, 0.030, 0.02, accentMat);
+  accent.position.y = -0.23;
+  g.add(accent);
+
+  // Throat — V shape (two thin struts)
+  const t1 = mkCyl(0.013, 0.013, 0.13, frameMat);
+  t1.position.set(0.055, -0.32, 0);
+  t1.rotation.z = -0.42;
+  g.add(t1);
+  const t2 = mkCyl(0.013, 0.013, 0.13, frameMat);
+  t2.position.set(-0.055, -0.32, 0);
+  t2.rotation.z = 0.42;
+  g.add(t2);
+
+  // Head — oval frame (torus, axis along z so face points forward/back)
+  const frame = new THREE.Mesh(
+    new THREE.TorusGeometry(0.13, 0.018, 8, 28),
+    frameMat.clone()
+  );
+  frame.position.y = -0.50;
+  frame.scale.set(1, 1.18, 1);
+  g.add(frame);
+
+  // Strings (translucent disc)
+  const strings = new THREE.Mesh(
+    new THREE.CircleGeometry(0.12, 22),
+    stringMat.clone()
+  );
+  strings.material.side = THREE.DoubleSide;
+  strings.material.transparent = true;
+  strings.material.opacity = 0.55;
+  strings.position.y = -0.50;
+  strings.scale.set(1, 1.18, 1);
+  g.add(strings);
+
+  // Tip marker (used for floor collision in tennis mode)
+  const tip = new THREE.Object3D();
+  tip.position.y = -0.65;
+  g.add(tip);
+  g.userData.tip = tip;
+
+  return g;
 }
 
 // ─── 50 CHARACTERS ──────────────────────────────────────────
@@ -507,11 +625,15 @@ const CHARACTERS = NAMES.map((name, i) => ({
   scale:     0.88 + ((i * 37) % 100) / 100 * 0.24,  // 0.88 - 1.12
 }));
 
-// ─── Mutable references swapped on character change ────────
+// ─── Mutable references — globals point to PLAYER A's parts.
+// Player B has its own parts stored in `playerB`. Most animations
+// operate on globals (= A); tennis animates both A and B.
 let root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
-    rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot;
+    rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot, racket;
 let ALL_GROUPS = [];
 let _groundProbes = [];
+let playerA = null, playerB = null;
+let baseYA = 1.53, baseYB = 1.53;
 
 function disposeCharacter(r) {
   r.traverse(o => {
@@ -523,20 +645,46 @@ function disposeCharacter(r) {
   });
 }
 
+function _partsToList(p) {
+  return [p.rSh, p.lSh, p.rElb, p.lElb, p.rHip, p.lHip, p.rKn, p.lKn,
+          p.rAnk, p.lAnk, p.spine, p.neckGrp, p.root];
+}
+
 function setCharacter(idx) {
   const cfg = CHARACTERS[idx];
-  // Re-anchor BASE_Y so feet rest on the floor regardless of scale
-  BASE_Y = 0.04 + 1.5 * (cfg.scale || 1.0);
+  baseYA = 0.04 + 1.75 * (cfg.scale || 1.0);
+  BASE_Y = baseYA;
   if (root) {
     scene.remove(root);
     disposeCharacter(root);
   }
   const parts = buildCharacter(cfg);
   ({ root, spine, neckGrp, rSh, lSh, rElb, lElb, rHnd, lHnd,
-     rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot } = parts);
+     rHip, lHip, rKn, lKn, rAnk, lAnk, rFoot, lFoot, racket } = parts);
   scene.add(root);
-  ALL_GROUPS = [rSh, lSh, rElb, lElb, rHip, lHip, rKn, lKn, rAnk, lAnk, spine, neckGrp, root];
+  ALL_GROUPS = _partsToList(parts);
   _groundProbes = [rFoot, lFoot, rHnd, lHnd];
+  parts.baseY = baseYA;
+  parts.allGroups = ALL_GROUPS;
+  playerA = parts;
+}
+
+function setCharacterB(idx) {
+  const cfg = CHARACTERS[idx];
+  baseYB = 0.04 + 1.75 * (cfg.scale || 1.0);
+  if (playerB && playerB.root) {
+    scene.remove(playerB.root);
+    disposeCharacter(playerB.root);
+  }
+  const parts = buildCharacter(cfg);
+  parts.baseY = baseYB;
+  parts.allGroups = _partsToList(parts);
+  // Position B on opposite court, facing player A
+  parts.root.position.set(0, baseYB, -3.0);
+  parts.root.rotation.y = Math.PI;
+  parts.root.visible = (mode === 'tennis');
+  scene.add(parts.root);
+  playerB = parts;
 }
 
 // ─── CAMERA ORBIT ───────────────────────────────────────────
@@ -725,28 +873,37 @@ const FORMULAS = [
       ['blend→toprock', 'ui > 0.65'],
     ]},
   ]},
-  { key:'sixseven', title:'SIX SEVEN  ω=2.0', sections:[
-    { name:'Stance', rows:[
-      ['rot.x',   '−0.55  (前趴)'],
-      ['rot.y',   '<em>sin</em>(ωt×0.35) × 0.18'],
-      ['neck.x',  '0.22'],
+  { key:'tennis', title:'TENNIS  rally physics', sections:[
+    { name:'Ball  ẋ = v', rows:[
+      ['v.y′',    '−g  (g = 9.81)'],
+      ['v′',      'v · 0.999  (drag)'],
+      ['bounce',  'v.y ↦ −0.62·v.y'],
+      ['skid',    'v.xz ↦ 0.93·v.xz'],
     ]},
-    { name:'Arms — 交替撐地 ↕', rows:[
-      ['hb',      '<em>sin</em>(2ωt)  ← ±1'],
-      ['rSh.z',   '−0.75 + hb × 0.65'],
-      ['lSh.z',   '+0.75 − hb × 0.65'],
-      ['rSh.x',   '0.28 − hb × 0.08'],
-      ['lSh.x',   '0.28 + hb × 0.08'],
-      ['rElb.x',  '0.15+max(0,−hb)×0.1'],
-      ['lElb.x',  '0.15+max(0,+hb)×0.1'],
+    { name:'Shot variants  v₀(target, h)', rows:[
+      ['vy₀',     '√(2g·(h−y₀))'],
+      ['T',       '(vy₀+√(vy₀²+2g·y₀))/g'],
+      ['vx₀',     '(xT−x₀) / T'],
+      ['vz₀',     '(zT−z₀) / T'],
     ]},
-    { name:'Legs  rφ=θ  lφ=θ+2π/3', rows:[
-      ['hip.x',   '<em>sin</em>(φ) × 0.85'],
-      ['hip.y',   '+<em>cos</em>(φ) × 0.62  (sweep)'],
-      ['rHip.z',  '+<em>cos</em>(φ) × 0.40'],
-      ['lHip.z',  '−<em>cos</em>(φ) × 0.40'],
-      ['kn.x',    'max(0,−<em>sin</em>(φ−0.4))×0.95'],
-      ['ank.x',   '<em>sin</em>(φ+0.3) × 0.18'],
+    { name:'Shot menu', rows:[
+      ['flat',    'h≈1.1  z deep, fast'],
+      ['topspin', 'h≈2.2  arcing, deep'],
+      ['slice',   'h≈1.0  low skid'],
+      ['lob',     'h≈4.5  high lift'],
+      ['drop',    'h≈1.3  short, near net'],
+      ['cross',   'h≈1.5  wide angle'],
+    ]},
+    { name:'AI chase  → intercept', rows:[
+      ['target',  'predictBounce(ball)'],
+      ['speed',   'min(4.5, 6·dist)'],
+      ['swing⇐',  '|p−racket| < 0.9'],
+      ['         ', 'y ∈ [0.35, 1.85]'],
+    ]},
+    { name:'Point ends', rows:[
+      ['out',     '|x|>HALF_W  ∨  bad side'],
+      ['net',     '|z|<0.06  ∧  y<0.95'],
+      ['miss',    'second bounce'],
     ]},
   ]},
 ];
@@ -775,11 +932,25 @@ function renderFormulas(activeKey) {
 
 document.querySelectorAll('.btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    const prevMode = mode;
     mode = btn.dataset.anim;
     labelEl.textContent = 'MODE: '+mode.toUpperCase();
     document.querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     renderFormulas(mode);
+    document.body.classList.toggle('tennis-mode', mode === 'tennis');
+    if (mode === 'tennis' && !playerB) setCharacterB(currentCharB);
+    // Pull camera back when first entering tennis so both players fit
+    if (mode === 'tennis' && prevMode !== 'tennis') {
+      camR = Math.max(camR, 11);
+      camPhi = 0.46;
+      camTheta = 0.20;
+      tennisEnter(performance.now() * 0.001);
+    } else if (mode !== 'tennis' && prevMode === 'tennis') {
+      camR = 7;
+      camPhi = 0.32;
+      tennisExit();
+    }
   });
 });
 
@@ -814,58 +985,136 @@ window.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') pickCharacter(currentChar + 1);
 });
 
+// Player B selector — only visible in tennis mode
+const charSelB    = document.getElementById('char-select-b');
+const charPrevB   = document.getElementById('char-prev-b');
+const charNextB   = document.getElementById('char-next-b');
+const charIdxElB  = document.getElementById('char-index-b');
+let currentCharB  = 1;
+
+CHARACTERS.forEach((c, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = String(i + 1).padStart(2, '0') + ' · ' + c.name;
+  charSelB.appendChild(opt);
+});
+
+function pickCharacterB(idx) {
+  currentCharB = (idx + CHARACTERS.length) % CHARACTERS.length;
+  setCharacterB(currentCharB);
+  charSelB.value = currentCharB;
+  charIdxElB.textContent = String(currentCharB + 1).padStart(2, '0') + '/' + String(CHARACTERS.length).padStart(2, '0');
+}
+
+charSelB.addEventListener('change', e => pickCharacterB(parseInt(e.target.value, 10)));
+charPrevB.addEventListener('click', () => pickCharacterB(currentCharB - 1));
+charNextB.addEventListener('click', () => pickCharacterB(currentCharB + 1));
+
 pickCharacter(0);
+
+// Arm-hang defaults — tuned so forearm cylinder doesn't penetrate torso.
+// Tightest spot: at forearm midpoint (y_spine ≈ 0.07) torso radius ≈ 0.235;
+// forearm half-thickness 0.082; arm origin at SX=0.46. Even with rSh.z=-0.06
+// the inner edge sits at ~0.310, leaving ~0.075 clearance.
+const ARM_HANG_Z = 0.06;
+const ARM_HANG_ELB = 0.0;
 
 function resetPose() {
   ALL_GROUPS.forEach(g => g.rotation.set(0,0,0));
   root.position.set(0, BASE_Y, 0);
-  // Default arm hang
-  rSh.rotation.z = -0.17;
-  lSh.rotation.z =  0.17;
-  rElb.rotation.x = 0.1;
-  lElb.rotation.x = 0.1;
+  rSh.rotation.z = -ARM_HANG_Z;
+  lSh.rotation.z =  ARM_HANG_Z;
+  rElb.rotation.x = ARM_HANG_ELB;
+  lElb.rotation.x = ARM_HANG_ELB;
+}
+
+function resetPoseFor(P, baseX, baseZ, baseRotY) {
+  P.allGroups.forEach(g => g.rotation.set(0,0,0));
+  P.root.position.set(baseX, P.baseY, baseZ);
+  P.root.rotation.y = baseRotY;
+  P.rSh.rotation.z = -ARM_HANG_Z;
+  P.lSh.rotation.z =  ARM_HANG_Z;
+  P.rElb.rotation.x = ARM_HANG_ELB;
+  P.lElb.rotation.x = ARM_HANG_ELB;
 }
 
 // ── Idle ──
+// ── Idle ──
+// Standing relaxed with subtle breathing, weight shift, and natural elbow flex.
+// CONVENTION FIX: rElb.x NEGATIVE = forearm flexes FORWARD (anatomically correct).
 function animIdle(t) {
   const b = Math.sin(t * 0.85);
   root.position.y = BASE_Y + b * 0.022;
   neckGrp.rotation.y = Math.sin(t * 0.3) * 0.09;
   neckGrp.rotation.x = Math.sin(t * 0.5) * 0.04;
   spine.rotation.z = Math.sin(t * 0.42) * 0.03;
-  // Subtle weight shift
   rHip.rotation.z =  Math.sin(t * 0.42) * 0.06;
   lHip.rotation.z = -Math.sin(t * 0.42) * 0.06;
-  rElb.rotation.x = 0.12 + Math.sin(t * 0.6) * 0.04;
-  lElb.rotation.x = 0.12 + Math.sin(t * 0.7) * 0.04;
+  // Forward flex (~7°) — the natural carrying-angle bend of a relaxed arm
+  rElb.rotation.x = -0.12 - Math.sin(t * 0.6) * 0.04;
+  lElb.rotation.x = -0.12 - Math.sin(t * 0.7) * 0.04;
 }
 
 // ── Walk ──
+// Per gait research: hip flex ±25° (≈0.40 rad), knee flex peaks at MID-SWING
+// (not toe-off) up to ~60°, arms swing ±20° opposite to legs, elbow held at
+// slight forward flex (~12° = -0.20 rad).
 function animWalk(t) {
-  const sp=2.8, ls=0.52, as=0.27, ks=0.72;
-  const r = Math.sin(t*sp), l = -Math.sin(t*sp);
-  rHip.rotation.x = r*ls; lHip.rotation.x = l*ls;
-  rKn.rotation.x  = Math.max(0, r)*ks; lKn.rotation.x = Math.max(0,l)*ks;
-  rSh.rotation.x = -r*as; rSh.rotation.z = -0.17;
-  lSh.rotation.x = -l*as; lSh.rotation.z =  0.17;
-  rElb.rotation.x = 0.12; lElb.rotation.x = 0.12;
-  root.position.y = BASE_Y + Math.abs(Math.sin(t*sp*2))*0.036;
-  spine.rotation.y = r * 0.07;
+  const sp = 2.5;
+  const ph = t * sp;
+  const r = Math.sin(ph), l = -r;
+
+  // Hip flexion: positive = leg behind. ±0.42 rad ≈ ±24° matches gait literature
+  rHip.rotation.x = r * 0.42;
+  lHip.rotation.x = l * 0.42;
+
+  // Knee flex peaks at MID-SWING, not at toe-off.
+  // For r-leg: swing is when r decreases from +1 → -1, mid-swing at ph=π
+  //   → -cos(ph) peaks at +1 there. For l-leg use +cos(ph).
+  rKn.rotation.x = Math.max(0, -Math.cos(ph)) * 1.05;
+  lKn.rotation.x = Math.max(0,  Math.cos(ph)) * 1.05;
+
+  // Arm swing opposite to legs (±0.32 rad ≈ ±18°)
+  rSh.rotation.x = -r * 0.32; rSh.rotation.z = -ARM_HANG_Z;
+  lSh.rotation.x = -l * 0.32; lSh.rotation.z =  ARM_HANG_Z;
+  // Elbow held at slight forward flex (NEGATIVE = anatomical forward direction)
+  rElb.rotation.x = -0.22;
+  lElb.rotation.x = -0.22;
+
+  // Body bounces twice per stride; chest counter-rotates against hips
+  root.position.y = BASE_Y + Math.abs(Math.sin(ph * 2)) * 0.035;
+  spine.rotation.y = -r * 0.06;
+  // Plantar push-off when leg is behind body
+  rAnk.rotation.x = Math.max(0,  r) * 0.18;
+  lAnk.rotation.x = Math.max(0,  l) * 0.18;
 }
 
 // ── Wave ──
+// Right arm RAISED to the right side (rSh.z ~ +90°), forearm bent ~80° forward
+// so the hand sits by the face. Wrist oscillation produces the side-to-side
+// wave motion. No reliance on collision clamp — pose is anatomically clean.
 function animWave(t) {
   animIdle(t);
-  const sp = 3.5;
-  rSh.rotation.z = -1.52 + Math.sin(t*sp)*0.22;
-  rSh.rotation.x = 0.1;
-  rElb.rotation.z = -0.35 + Math.sin(t*sp+0.6)*0.18;
-  rElb.rotation.x = 0.12;
-  lSh.rotation.z = 0.18;
-  lElb.rotation.x = 0.08;
+  const sp = 3.6;
+  // Upper arm extended out and slightly above horizontal
+  rSh.rotation.z = 1.55 + Math.sin(t * sp * 0.5) * 0.04;
+  rSh.rotation.x = -0.12;
+  rSh.rotation.y = 0;
+  // Forearm flexed forward ~80° (NEGATIVE in our convention)
+  rElb.rotation.x = -1.40;
+  // Wave: oscillate around the elbow's local Y to swing the hand side-to-side
+  rElb.rotation.y = Math.sin(t * sp) * 0.45;
+  rElb.rotation.z = 0;
+  // Left arm relaxed
+  lSh.rotation.z = ARM_HANG_Z;
+  lSh.rotation.x = 0;
+  lElb.rotation.x = -0.10;
+  lElb.rotation.y = 0;
+  lElb.rotation.z = 0;
 }
 
 // ── Dance ──
+// Elbow direction flipped to NEGATIVE so forearms angle forward (anatomical).
 function animDance(t) {
   const sp = 4.5;
   const beat = Math.pow(Math.abs(Math.sin(t * sp * 0.5)), 0.5);
@@ -879,12 +1128,15 @@ function animDance(t) {
   neckGrp.rotation.y = Math.sin(t*sp)*0.25;
   neckGrp.rotation.z = Math.sin(t*sp*1.2)*0.08;
   neckGrp.rotation.x = -beat * 0.15;
-  rSh.rotation.z = -0.55 + Math.sin(t*sp)*0.58;
-  lSh.rotation.z =  0.55 + Math.sin(t*sp+Math.PI)*0.58;
+  // Arms abduct OUT (positive z for right, negative for left) — flipped from
+  // the previous "cross-body" pattern that depended on the broken clamp
+  rSh.rotation.z =  0.55 + Math.sin(t*sp)*0.58;
+  lSh.rotation.z = -0.55 - Math.sin(t*sp+Math.PI)*0.58;
   rSh.rotation.x =  Math.cos(t*sp)*0.42;
   lSh.rotation.x = -Math.cos(t*sp)*0.42;
-  rElb.rotation.x = 0.7 + Math.sin(t*sp*1.4)*0.32;
-  lElb.rotation.x = 0.7 + Math.sin(t*sp*1.4+1)*0.32;
+  // Forearms flex FORWARD (negative rElb.x)
+  rElb.rotation.x = -0.7 - Math.sin(t*sp*1.4)*0.32;
+  lElb.rotation.x = -0.7 - Math.sin(t*sp*1.4+1)*0.32;
   rElb.rotation.z = Math.sin(t*sp*2)*0.22;
   lElb.rotation.z = Math.sin(t*sp*2+1.2)*0.22;
   rHip.rotation.x = Math.sin(t*sp)*0.32;
@@ -898,20 +1150,35 @@ function animDance(t) {
 }
 
 // ── Run ──
+// Real running form: elbow held at ~90° flex FORWARD (rElb.x ≈ -1.3 rad),
+// upper-arm pumps ±30°, knees lift higher than walk (~75°), forward torso
+// lean. Knee flex peaks at mid-swing per gait research.
 function animRun(t) {
-  const sp=5.5, ls=0.72, as=0.55, ks=1.0;
-  const r = Math.sin(t*sp), l = -Math.sin(t*sp);
-  rHip.rotation.x = r*ls; lHip.rotation.x = l*ls;
-  rKn.rotation.x  = Math.max(0, r)*ks; lKn.rotation.x = Math.max(0,l)*ks;
-  rSh.rotation.x = -r*as; rSh.rotation.z = -0.17;
-  lSh.rotation.x = -l*as; lSh.rotation.z =  0.17;
-  rElb.rotation.x = 0.6 + r*0.3;
-  lElb.rotation.x = 0.6 + l*0.3;
-  root.position.y = BASE_Y + Math.abs(Math.sin(t*sp*2))*0.08;
-  root.rotation.x = -0.1; // forward lean
-  spine.rotation.y = r * 0.1;
-  spine.rotation.x = -0.08;
+  const sp = 5.0;
+  const ph = t * sp;
+  const r = Math.sin(ph), l = -r;
+
+  // Hip ±0.65 rad ≈ ±37° (sprint range)
+  rHip.rotation.x = r * 0.65;
+  lHip.rotation.x = l * 0.65;
+  // Knee max flex at mid-swing, ~80°
+  rKn.rotation.x = Math.max(0, -Math.cos(ph)) * 1.40;
+  lKn.rotation.x = Math.max(0,  Math.cos(ph)) * 1.40;
+
+  // Arm pump ±30°
+  rSh.rotation.x = -r * 0.55; rSh.rotation.z = -ARM_HANG_Z;
+  lSh.rotation.x = -l * 0.55; lSh.rotation.z =  ARM_HANG_Z;
+  // Elbow held at ~75° forward flex with slight pump on stride beat
+  rElb.rotation.x = -1.30 + r * 0.15;
+  lElb.rotation.x = -1.30 + l * 0.15;
+
+  root.position.y = BASE_Y + Math.abs(Math.sin(ph * 2)) * 0.07;
+  root.rotation.x = -0.08;
+  spine.rotation.y = -r * 0.10;
+  spine.rotation.x = -0.06;
   neckGrp.rotation.x = 0.08;
+  rAnk.rotation.x = Math.max(0,  r) * 0.30;
+  lAnk.rotation.x = Math.max(0,  l) * 0.30;
 }
 
 // ── Break ──────────────────────────────────────────────────
@@ -954,8 +1221,8 @@ function breakToprock(t, lt) {
   lSh.rotation.z =  0.55 + Math.sin(t * sp + 0.3 + Math.PI) * 0.38;
   rSh.rotation.x =  Math.cos(t * sp) * 0.45;
   lSh.rotation.x = -Math.cos(t * sp) * 0.45;
-  rElb.rotation.x = 0.6 + Math.sin(t * sp * 1.8) * 0.35;
-  lElb.rotation.x = 0.6 + Math.cos(t * sp * 1.8) * 0.35;
+  rElb.rotation.x = -0.6 - Math.sin(t * sp * 1.8) * 0.35;
+  lElb.rotation.x = -0.6 - Math.cos(t * sp * 1.8) * 0.35;
   // wrist pop
   rElb.rotation.z = Math.sin(t * sp * 2) * 0.25;
   lElb.rotation.z = Math.sin(t * sp * 2 + 1) * 0.25;
@@ -990,8 +1257,8 @@ function breakWindmill(t, lt) {
   rSh.rotation.x =  Math.cos(spinAngle) * 0.62;
   lSh.rotation.x = -Math.cos(spinAngle) * 0.62;
   // Elbow only bends when arm is NOT planted into floor
-  rElb.rotation.x = 0.2 + Math.max(0, Math.sin(spinAngle + 0.8)) * 0.55;
-  lElb.rotation.x = 0.2 + Math.max(0, Math.sin(spinAngle + 0.8 + Math.PI)) * 0.55;
+  rElb.rotation.x = -0.2 - Math.max(0, Math.sin(spinAngle + 0.8)) * 0.55;
+  lElb.rotation.x = -0.2 - Math.max(0, Math.sin(spinAngle + 0.8 + Math.PI)) * 0.55;
 
   spine.rotation.x = Math.sin(spinAngle * 0.7) * 0.32;
   spine.rotation.z = Math.cos(spinAngle) * 0.18;
@@ -1030,8 +1297,8 @@ function breakHeadspin(t, lt) {
   lSh.rotation.z =  0.52 + Math.sin(spinAngle * 0.35 + 1.1) * 0.18;
   rSh.rotation.x = Math.sin(spinAngle * 0.22) * 0.22;
   lSh.rotation.x = Math.cos(spinAngle * 0.22) * 0.22;
-  rElb.rotation.x = 0.32 + Math.sin(lt * 2) * 0.1;
-  lElb.rotation.x = 0.32 + Math.sin(lt * 2 + 1) * 0.1;
+  rElb.rotation.x = -0.32 - Math.sin(lt * 2) * 0.1;
+  lElb.rotation.x = -0.32 - Math.sin(lt * 2 + 1) * 0.1;
 
   // Head: trails spin slightly, slight strain tilt
   neckGrp.rotation.y = -spinAngle * 0.04;
@@ -1052,13 +1319,13 @@ function breakFreeze(t, lt) {
   // RIGHT arm: weight-bearing, elbow toward floor
   rSh.rotation.z = lerp(-0.52, -Math.PI * 0.56, fi);
   rSh.rotation.x = lerp(0.22, 0.2, fi);
-  rElb.rotation.x = lerp(0.32, 0.14, fi);
+  rElb.rotation.x = lerp(-0.32, -0.14, fi);
   rElb.rotation.z = lerp(0, 0.28, fi);
 
   // LEFT arm: dramatic counterbalance
   lSh.rotation.z = lerp(0.52, -0.12, fi);
   lSh.rotation.x = lerp(0.22, 0.35, fi);
-  lElb.rotation.x = lerp(0.32, 0.58, fi);
+  lElb.rotation.x = lerp(-0.32, -0.58, fi);
   lElb.rotation.z = lerp(0, -0.38, fi);
 
   // RIGHT leg: kick high
@@ -1096,8 +1363,8 @@ function breakGetUp(t, lt) {
   lSh.rotation.z = lerp(-0.12, 0.52, ui);
   rSh.rotation.x = lerp(0.2, 0.22, ui);
   lSh.rotation.x = lerp(0.35, 0.22, ui);
-  rElb.rotation.x = lerp(0.14, 0.55, ui);
-  lElb.rotation.x = lerp(0.58, 0.55, ui);
+  rElb.rotation.x = lerp(-0.14, -0.55, ui);
+  lElb.rotation.x = lerp(-0.58, -0.55, ui);
 
   rHip.rotation.x = lerp(1.72,  0.1, ui);
   lHip.rotation.x = lerp(-1.2, -0.1, ui);
@@ -1115,53 +1382,654 @@ function breakGetUp(t, lt) {
   }
 }
 
-// ── Six Step / Seven Step ──
-// Defining feature: hands alternate UP and DOWN while legs circle the body.
-// Body in a low push-up / crouch stance (face toward floor).
-function animSixSeven(t) {
-  const sp = 2.0;
-  const θ  = t * sp;
+// ─── TENNIS RALLY SYSTEM ────────────────────────────────────
+// Real two-player rally: ball physics (gravity + bounce + drag),
+// six shot types (flat / topspin / slice / lob / drop / cross),
+// AI predicts ball intercept + runs to it, swings on contact,
+// scoring with HUD. Both players animated with run-in-place when
+// chasing and a state-driven swing when striking.
+// ────────────────────────────────────────────────────────────
 
-  // Low crouch / push-up stance — body tilts forward toward floor
-  root.rotation.x = -0.55;
-  root.rotation.y = Math.sin(θ * 0.35) * 0.18;
-  root.position.y = 0.95; // ground collision will settle this correctly
+const COURT = {
+  HALF_W: 2.4, HALF_L: 4.2,
+  NET_H: 0.95, NET_HALFW: 2.55,
+  BALL_R: 0.034,
+  GRAV: 9.81, BOUNCE: 0.62, DRAG: 0.999,
+  RACKET_REACH: 0.95,
+  STRIKE_Y_MIN: 0.32, STRIKE_Y_MAX: 1.95,
+};
 
-  spine.rotation.x  = -0.12;
-  spine.rotation.y  = Math.sin(θ * 0.5) * 0.08;
-  neckGrp.rotation.x = 0.22;
-  neckGrp.rotation.y = Math.sin(θ * 0.4) * 0.12;
+// ─── COURT VISUALS ──────────────────────────────────────────
+let courtGroup = null;
+function buildCourt() {
+  if (courtGroup) return;
+  courtGroup = new THREE.Group();
 
-  // ── THE MAIN FEATURE: hands pump UP ↕ DOWN alternately ──
-  // hb oscillates ±1 twice per leg cycle → snappy hand switch
-  const hb = Math.sin(θ * 2);
+  // Court surface tint
+  const surfMat = new THREE.MeshPhongMaterial({ color: 0x0a2230, shininess: 8 });
+  const surf = new THREE.Mesh(
+    new THREE.PlaneGeometry(COURT.HALF_W * 2 + 0.6, COURT.HALF_L * 2 + 0.6),
+    surfMat
+  );
+  surf.rotation.x = -Math.PI / 2;
+  surf.position.y = 0.005;
+  surf.receiveShadow = true;
+  courtGroup.add(surf);
 
-  // Right arm: DOWN (–1.4) when hb=–1, UP (–0.1) when hb=+1
-  rSh.rotation.z = -0.75 + hb * 0.65;
-  rSh.rotation.x =  0.28 - hb * 0.08;
-  rElb.rotation.x = 0.15 + Math.max(0, -hb) * 0.1; // slight bend when down
+  // Lines (bright cyan)
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0x00ffaa, transparent: true, opacity: 0.55 });
+  const line = (w, d, x, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), lineMat);
+    m.position.set(x, 0.012, z);
+    courtGroup.add(m);
+  };
+  // Outer rectangle
+  line(COURT.HALF_W * 2 + 0.06, 0.04, 0,  COURT.HALF_L);
+  line(COURT.HALF_W * 2 + 0.06, 0.04, 0, -COURT.HALF_L);
+  line(0.04, COURT.HALF_L * 2, -COURT.HALF_W, 0);
+  line(0.04, COURT.HALF_L * 2,  COURT.HALF_W, 0);
+  // Service box (mid-court)
+  line(COURT.HALF_W * 2, 0.03, 0,  COURT.HALF_L * 0.5);
+  line(COURT.HALF_W * 2, 0.03, 0, -COURT.HALF_L * 0.5);
+  line(0.03, COURT.HALF_L,       0, 0);
 
-  // Left arm: opposite phase — DOWN when right is UP
-  lSh.rotation.z =  0.75 - hb * 0.65;
-  lSh.rotation.x =  0.28 + hb * 0.08;
-  lElb.rotation.x = 0.15 + Math.max(0, hb) * 0.1;
+  // Net
+  const postMat = mkMat(0x222426, 80);
+  for (const x of [-COURT.NET_HALFW, COURT.NET_HALFW]) {
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.045, COURT.NET_H + 0.08),
+      postMat
+    );
+    post.position.set(x, (COURT.NET_H + 0.08) / 2, 0);
+    post.castShadow = true;
+    courtGroup.add(post);
+  }
+  const netCloth = new THREE.Mesh(
+    new THREE.PlaneGeometry(COURT.NET_HALFW * 2, COURT.NET_H),
+    new THREE.MeshBasicMaterial({
+      color: 0xddeeff, transparent: true, opacity: 0.18, side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  netCloth.position.set(0, COURT.NET_H / 2, 0);
+  courtGroup.add(netCloth);
+  const band = new THREE.Mesh(
+    new THREE.BoxGeometry(COURT.NET_HALFW * 2, 0.03, 0.04),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  band.position.set(0, COURT.NET_H, 0);
+  courtGroup.add(band);
 
-  // ── LEGS: circle around the body ──
-  // 120° phase offset → 3 steps per half-revolution each side
-  const rφ = θ;
-  const lφ = θ + Math.PI * 2 / 3;
+  courtGroup.visible = false;
+  scene.add(courtGroup);
+}
+buildCourt();
 
-  rHip.rotation.x =  Math.sin(rφ) * 0.85;
-  rHip.rotation.y =  Math.cos(rφ) * 0.62;
-  rHip.rotation.z =  Math.cos(rφ) * 0.40;
-  rKn.rotation.x  =  Math.max(0, -Math.sin(rφ - 0.4)) * 0.95;
-  rAnk.rotation.x =  Math.sin(rφ + 0.3) * 0.18;
+// ─── BALL ────────────────────────────────────────────────────
+const ballMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(COURT.BALL_R, 14, 12),
+  new THREE.MeshPhongMaterial({ color: 0xddff44, emissive: 0x3a4400, shininess: 90 })
+);
+ballMesh.castShadow = true;
+ballMesh.visible = false;
+scene.add(ballMesh);
 
-  lHip.rotation.x =  Math.sin(lφ) * 0.85;
-  lHip.rotation.y =  Math.cos(lφ) * 0.62;
-  lHip.rotation.z = -Math.cos(lφ) * 0.40;
-  lKn.rotation.x  =  Math.max(0, -Math.sin(lφ - 0.4)) * 0.95;
-  lAnk.rotation.x =  Math.sin(lφ + 0.3) * 0.18;
+// Shadow blob — a cheap dark disc that follows the ball's XZ on the floor.
+// Reads as a real shadow even in fog without needing high-res shadow maps.
+const ballShadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.08, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false })
+);
+ballShadow.rotation.x = -Math.PI / 2;
+ballShadow.visible = false;
+scene.add(ballShadow);
+
+const ball = {
+  pos: new THREE.Vector3(),
+  vel: new THREE.Vector3(),
+  alive: false,
+  bounces: 0,
+  hitter: null,        // 'A' | 'B' | null
+  spinAxis: new THREE.Vector3(1, 0, 0),
+  spinRate: 0,
+};
+
+// ─── PLAYER RALLY STATE ─────────────────────────────────────
+function makeRallyState(side) {
+  return {
+    side,                                // +1 (A on +z) or -1 (B on -z)
+    pos: new THREE.Vector3(0, 0, side * 3.6),
+    facing: side > 0 ? Math.PI : 0,      // A faces -z, B faces +z
+    targetX: 0, targetZ: side * 3.6,
+    speed: 0, runPhase: 0,
+    swingT0: -1,
+    swingShot: null,
+    swingTarget: null,
+    contactDone: false,
+    feedT: -1,                            // for "watch the bounce" head tracking
+  };
+}
+
+const tennisGame = {
+  A: makeRallyState(+1),
+  B: makeRallyState(-1),
+  scoreA: 0, scoreB: 0,
+  serveBy: 'A',
+  rallyEndsAt: -1,
+  lastShotName: '',
+  lastShotEnd: '',
+};
+
+// ─── SHOT TYPES ─────────────────────────────────────────────
+//   apex   = peak height of arc above ground (m)
+//   deepZ  = absolute z of intended bounce (deeper = closer to opponent's baseline)
+//   latX   = max lateral offset of bounce (-latX..+latX, random)
+const SHOT_PROFILES = {
+  flat:    { apex: 1.30, deepZ: 3.4, latX: 1.7, weight: 22 },
+  topspin: { apex: 2.30, deepZ: 3.6, latX: 1.6, weight: 28 },
+  slice:   { apex: 1.25, deepZ: 3.1, latX: 1.8, weight: 16 },
+  lob:     { apex: 4.40, deepZ: 3.6, latX: 1.4, weight: 10 },
+  drop:    { apex: 1.65, deepZ: 0.9, latX: 1.5, weight: 12 },
+  cross:   { apex: 1.65, deepZ: 2.2, latX: 2.1, weight: 12 },
+};
+const SHOT_NAMES = Object.keys(SHOT_PROFILES);
+
+// Position-aware shot picker: drop and lob are rare from deep court
+// (would either die in the net or sail long).
+function pickShot(P) {
+  const deep = P ? Math.abs(P.pos.z) > 3.0 : false;
+  let total = 0;
+  const w = {};
+  for (const name of SHOT_NAMES) {
+    let weight = SHOT_PROFILES[name].weight;
+    if (deep && (name === 'drop' || name === 'lob')) weight *= 0.35;
+    if (!deep && name === 'lob') weight *= 0.6;
+    w[name] = weight;
+    total += weight;
+  }
+  let r = Math.random() * total;
+  for (const name of SHOT_NAMES) {
+    r -= w[name];
+    if (r <= 0) return name;
+  }
+  return 'flat';
+}
+
+// Initial velocity that takes ball from p0 to ground point (xT, 0, zT) with peak height = apex.
+// Solves: yPeak = y0 + vy0²/(2g) → vy0 = sqrt(2g(peak − y0))
+//         t_land = (vy0 + sqrt(vy0² + 2g·y0)) / g
+function buildShotVelocity(p0, target, apex) {
+  const g = COURT.GRAV;
+  const peak = Math.max(apex, p0.y + 0.15);
+  const vy0 = Math.sqrt(2 * g * (peak - p0.y));
+  const T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * g * Math.max(p0.y, 0))) / g;
+  return new THREE.Vector3(
+    (target.x - p0.x) / T,
+    vy0,
+    (target.z - p0.z) / T
+  );
+}
+
+// Forward-simulate ball physics by `dtAhead` seconds. Returns predicted state.
+const _simP = new THREE.Vector3(), _simV = new THREE.Vector3();
+function predictBall(dtAhead, fromPos, fromVel, fromBounces) {
+  _simP.copy(fromPos); _simV.copy(fromVel);
+  let bounced = fromBounces > 0;
+  const step = 1 / 120;
+  const N = Math.max(1, Math.ceil(dtAhead / step));
+  for (let i = 0; i < N; i++) {
+    _simV.y -= COURT.GRAV * step;
+    _simV.multiplyScalar(COURT.DRAG);
+    _simP.addScaledVector(_simV, step);
+    if (_simP.y <= COURT.BALL_R && _simV.y < 0) {
+      _simP.y = COURT.BALL_R;
+      _simV.y *= -COURT.BOUNCE;
+      _simV.x *= 0.93; _simV.z *= 0.93;
+      bounced = true;
+    }
+  }
+  return { p: _simP.clone(), v: _simV.clone(), bounced };
+}
+
+// Predict where the receiving player should run: the descent-after-bounce
+// position at strike height (~1.0m). Falls back to current ball XZ.
+function predictIntercept(side) {
+  const p = ball.pos.clone();
+  const v = ball.vel.clone();
+  let bounced = ball.bounces > 0;
+  const step = 1 / 120;
+  for (let i = 0; i < 600; i++) {
+    v.y -= COURT.GRAV * step;
+    v.multiplyScalar(COURT.DRAG);
+    p.addScaledVector(v, step);
+    if (p.y <= COURT.BALL_R && v.y < 0) {
+      p.y = COURT.BALL_R;
+      v.y *= -COURT.BOUNCE;
+      v.x *= 0.93; v.z *= 0.93;
+      bounced = true;
+    }
+    // Once on receiver's side AND descending through strike zone → that's our spot
+    if (bounced && v.y < 0 && p.y < 1.10 && p.y > 0.55 && (p.z * side) > 0.4) {
+      return { x: p.x, z: p.z };
+    }
+    // Pre-bounce volley window (if ball stays high)
+    if (!bounced && (p.z * side) > 2.4 && p.y < 1.7 && p.y > 0.6) {
+      return { x: p.x, z: p.z };
+    }
+    if (p.y < 0 && v.y < 0) break;
+  }
+  return { x: ball.pos.x, z: ball.pos.z };
+}
+
+// Approximate the racket sweet-spot in world space for player P.
+// Stand-in: 0.4m forward of pelvis + 0.5m to dominant (right) side, at 1.0m height.
+function computeRacketPos(P) {
+  const f = P.facing;
+  const fwdX = Math.sin(f), fwdZ = Math.cos(f);
+  const rgtX =  Math.cos(f), rgtZ = -Math.sin(f);
+  return new THREE.Vector3(
+    P.pos.x + fwdX * 0.42 + rgtX * 0.52,
+    1.05,
+    P.pos.z + fwdZ * 0.42 + rgtZ * 0.52
+  );
+}
+
+function lerpAngle(a, b, t) {
+  let d = b - a;
+  while (d >  Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * Math.max(0, Math.min(1, t));
+}
+const _clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+// Move player toward target; updates pos, facing, runPhase, speed.
+function movePlayer(P, dt) {
+  const dx = P.targetX - P.pos.x;
+  const dz = P.targetZ - P.pos.z;
+  const d = Math.hypot(dx, dz);
+  const FACE = P.side > 0 ? Math.PI : 0;
+  if (d > 0.04) {
+    // Smooth ramp: full speed when far, decelerate as we close in
+    const v = Math.min(4.8, d * 5.0);
+    P.speed = v;
+    const stepMax = v * dt;
+    const step = Math.min(stepMax, d);
+    P.pos.x += (dx / d) * step;
+    P.pos.z += (dz / d) * step;
+    // Mostly face opponent; slight lean toward direction of motion
+    const motionDir = Math.atan2(dx, dz);
+    P.facing = lerpAngle(P.facing, lerpAngle(FACE, motionDir, 0.35), dt * 6);
+    P.runPhase += v * dt * 2.6;
+  } else {
+    P.pos.x = P.targetX; P.pos.z = P.targetZ;
+    P.speed *= Math.exp(-dt * 6);
+    P.facing = lerpAngle(P.facing, FACE, dt * 7);
+  }
+  // Keep player on own side of the net (slight margin)
+  const minZ = P.side > 0 ?  0.5 : -COURT.HALF_L - 1.2;
+  const maxZ = P.side > 0 ?  COURT.HALF_L + 1.2 : -0.5;
+  P.pos.z = _clamp(P.pos.z, minZ, maxZ);
+  P.pos.x = _clamp(P.pos.x, -COURT.HALF_W - 1.6, COURT.HALF_W + 1.6);
+}
+
+// ─── SWING TIMING ───────────────────────────────────────────
+const SWING_DURATION = 0.92;
+const SWING_CONTACT  = 0.42;   // contact moment within the swing
+const SWING_LOOKAHEAD = SWING_CONTACT;
+
+function triggerSwing(P, t, name) {
+  P.swingT0 = t;
+  P.swingShot = pickShot(P);
+  P.contactDone = false;
+  // Pick target inside opponent's court
+  const oppSide = -P.side;
+  const sp = SHOT_PROFILES[P.swingShot];
+  let tx = (Math.random() * 2 - 1) * Math.min(sp.latX, COURT.HALF_W * 0.92);
+  let tz = oppSide * (sp.deepZ * (0.55 + Math.random() * 0.55));
+  tx = _clamp(tx, -COURT.HALF_W * 0.94, COURT.HALF_W * 0.94);
+  tz = oppSide > 0
+    ? _clamp(tz,  0.4,  COURT.HALF_L * 0.96)
+    : _clamp(tz, -COURT.HALF_L * 0.96, -0.4);
+  P.swingTarget = { x: tx, z: tz, apex: sp.apex };
+}
+
+function resolveSwing(P, t, name) {
+  if (P.swingT0 < 0) return;
+  const lt = t - P.swingT0;
+  if (!P.contactDone && lt >= SWING_CONTACT) {
+    const racket = computeRacketPos(P);
+    const dxz = Math.hypot(ball.pos.x - racket.x, ball.pos.z - racket.z);
+    const yOK = ball.pos.y > 0.30 && ball.pos.y < 2.05;
+    if (dxz < COURT.RACKET_REACH * 1.15 && yOK && ball.alive) {
+      const start = ball.pos.clone();
+      const target = new THREE.Vector3(P.swingTarget.x, COURT.BALL_R, P.swingTarget.z);
+      const v = buildShotVelocity(start, target, P.swingTarget.apex);
+      ball.vel.copy(v);
+      ball.hitter = name;
+      ball.bounces = 0;
+      // Visual spin axis perpendicular to motion
+      ball.spinAxis.set(-v.z, 0, v.x).normalize();
+      ball.spinRate = (P.swingShot === 'topspin') ? 28
+                    : (P.swingShot === 'slice')   ? -22
+                    : 14;
+      tennisGame.lastShotName = P.swingShot.toUpperCase();
+      updateScoreHUD();
+    }
+    P.contactDone = true;
+  }
+  if (lt > SWING_DURATION) {
+    P.swingT0 = -1;
+    P.swingShot = null;
+    P.swingTarget = null;
+  }
+}
+
+function endRally(t, winner, reason) {
+  if (winner === 'A') tennisGame.scoreA++;
+  else                tennisGame.scoreB++;
+  tennisGame.serveBy = winner;
+  tennisGame.rallyEndsAt = t + 1.6;
+  tennisGame.lastShotEnd = reason;
+  ball.alive = false;
+  ball.vel.set(0, 0, 0);
+  ballMesh.visible = false;
+  ballShadow.visible = false;
+  tennisGame.A.swingT0 = -1;
+  tennisGame.B.swingT0 = -1;
+  updateScoreHUD();
+}
+
+function serveRally(t) {
+  const server = tennisGame.serveBy;
+  const recv = (server === 'A') ? 'B' : 'A';
+  const S = tennisGame[server];
+  // Place server on baseline center for the serve
+  S.pos.x = 0; S.pos.z = S.side * 3.7;
+  S.facing = S.side > 0 ? Math.PI : 0;
+  // Ball starts at server's racket height, give it serve trajectory
+  const racket = computeRacketPos(S);
+  ball.pos.set(racket.x, 1.55, racket.z);
+  ball.bounces = 0;
+  ball.alive = true;
+  ball.hitter = server;
+  // Random aimed serve into opponent's service box (front half of opp court)
+  const oppSide = -S.side;
+  const tx = (Math.random() * 2 - 1) * COURT.HALF_W * 0.78;
+  const tz = oppSide * (1.4 + Math.random() * 1.6);
+  const apex = 1.35 + Math.random() * 0.7;
+  ball.vel.copy(buildShotVelocity(ball.pos, { x: tx, y: 0, z: tz }, apex));
+  ballMesh.visible = true;
+  ballShadow.visible = true;
+  tennisGame.rallyEndsAt = -1;
+  tennisGame.lastShotName = 'SERVE';
+  tennisGame.lastShotEnd = '';
+  updateScoreHUD();
+}
+
+// ─── MAIN PER-FRAME RALLY UPDATE ───────────────────────────
+function tennisTick(t, dt) {
+  // Between-rally pause: players walk back to baseline center
+  if (tennisGame.rallyEndsAt > 0 && t < tennisGame.rallyEndsAt) {
+    tennisGame.A.targetX = 0; tennisGame.A.targetZ =  3.7;
+    tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
+    movePlayer(tennisGame.A, dt);
+    movePlayer(tennisGame.B, dt);
+    return;
+  }
+  if (!ball.alive) {
+    serveRally(t);
+    return;
+  }
+
+  // ── Ball physics ──
+  ball.vel.y -= COURT.GRAV * dt;
+  ball.vel.multiplyScalar(COURT.DRAG);
+  ball.pos.addScaledVector(ball.vel, dt);
+
+  // Net collision (thin box at z=0, height 0..NET_H, width within posts)
+  if (Math.abs(ball.pos.z) < 0.06 && ball.pos.y < COURT.NET_H && Math.abs(ball.pos.x) < COURT.NET_HALFW) {
+    endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'NET');
+    return;
+  }
+
+  // Ground bounce
+  if (ball.pos.y <= COURT.BALL_R && ball.vel.y < 0) {
+    ball.pos.y = COURT.BALL_R;
+    ball.vel.y *= -COURT.BOUNCE;
+    ball.vel.x *= 0.93; ball.vel.z *= 0.93;
+    ball.bounces++;
+
+    if (ball.bounces === 1) {
+      // First bounce judgement: must be in opponent's court for hitter's shot to be legal
+      const ownerSide = (ball.hitter === 'A') ? +1 : -1;
+      const inOppHalf = (ball.pos.z * ownerSide) < -0.05;
+      const inLat = Math.abs(ball.pos.x) <= COURT.HALF_W + 0.04;
+      const inDeep = Math.abs(ball.pos.z) <= COURT.HALF_L + 0.04;
+      if (!inOppHalf || !inLat || !inDeep) {
+        endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'OUT');
+        return;
+      }
+    } else if (ball.bounces >= 2) {
+      // Second bounce → receiver missed → hitter scores
+      endRally(t, ball.hitter, 'WIN');
+      return;
+    }
+  }
+
+  // Ball completely off court (sailed past back fence)
+  if (Math.abs(ball.pos.z) > COURT.HALF_L + 4 || Math.abs(ball.pos.x) > COURT.HALF_W + 4) {
+    endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'OUT');
+    return;
+  }
+
+  // ── AI: receiver chases, hitter recovers ──
+  const recvName = (ball.hitter === 'A') ? 'B' : 'A';
+  const otherName = ball.hitter;
+  const R = tennisGame[recvName];
+  const O = tennisGame[otherName];
+
+  const intercept = predictIntercept(R.side);
+  R.targetX = _clamp(intercept.x, -COURT.HALF_W * 1.05, COURT.HALF_W * 1.05);
+  R.targetZ = R.side > 0
+    ? _clamp(intercept.z,  0.6,  COURT.HALF_L + 0.6)
+    : _clamp(intercept.z, -COURT.HALF_L - 0.6, -0.6);
+
+  O.targetX = ball.pos.x * 0.25;       // shade slightly toward where ball is
+  O.targetZ = O.side * 3.5;
+
+  movePlayer(tennisGame.A, dt);
+  movePlayer(tennisGame.B, dt);
+
+  // ── Swing trigger: predict ball position SWING_LOOKAHEAD seconds ahead ──
+  if (R.swingT0 < 0) {
+    const fut = predictBall(SWING_LOOKAHEAD, ball.pos, ball.vel, ball.bounces);
+    const racket = computeRacketPos(R);
+    const dxz = Math.hypot(fut.p.x - racket.x, fut.p.z - racket.z);
+    const yOK = fut.p.y > COURT.STRIKE_Y_MIN && fut.p.y < COURT.STRIKE_Y_MAX;
+    // Ball should still be on receiver's side (or near it) at impact
+    const onSide = (fut.p.z * R.side) > -0.3;
+    if (dxz < COURT.RACKET_REACH && yOK && onSide) {
+      triggerSwing(R, t, recvName);
+    }
+  }
+
+  resolveSwing(tennisGame.A, t, 'A');
+  resolveSwing(tennisGame.B, t, 'B');
+
+  // ── Visual ball ──
+  ballMesh.position.copy(ball.pos);
+  ballMesh.rotateOnAxis(ball.spinAxis, ball.spinRate * dt);
+  ballShadow.position.set(ball.pos.x, 0.01, ball.pos.z);
+  const sh = _clamp(1 - ball.pos.y / 5, 0.25, 1);
+  ballShadow.scale.setScalar(sh);
+  ballShadow.material.opacity = 0.55 * sh;
+}
+
+// ─── POSE: READY (light bounce, racket up at right) ─────────
+function poseTennisReady(P, parts, t) {
+  const bounce = Math.sin(t * 5.5) * 0.5 + 0.5;
+  const knee = 0.30 + bounce * 0.05;
+
+  parts.rSh.rotation.set(-0.18, 0, 0.55);
+  parts.rElb.rotation.set(-0.65, 0, 0);
+  parts.lSh.rotation.set(-0.50, 0, 0.30);
+  parts.lElb.rotation.set(-0.75, 0, 0);
+
+  parts.rHip.rotation.set(-knee * 0.55, 0, 0);
+  parts.lHip.rotation.set(-knee * 0.55, 0, 0);
+  parts.rKn.rotation.x = knee;
+  parts.lKn.rotation.x = knee;
+  parts.rAnk.rotation.x = -knee * 0.4;
+  parts.lAnk.rotation.x = -knee * 0.4;
+
+  parts.spine.rotation.set(-0.06, 0, 0);
+  parts.neckGrp.rotation.set(0.04, 0, 0);
+}
+
+// ─── POSE: RUN (legs/arms pump scaled by speed) ─────────────
+function poseTennisRun(P, parts, t) {
+  const ph = P.runPhase;
+  const r = Math.sin(ph), l = -r;
+  const amp = Math.min(1, P.speed / 3.4);
+
+  parts.rHip.rotation.set(r * 0.55 * amp, 0, 0);
+  parts.lHip.rotation.set(l * 0.55 * amp, 0, 0);
+  parts.rKn.rotation.x = Math.max(0, -Math.cos(ph)) * 1.20 * amp;
+  parts.lKn.rotation.x = Math.max(0,  Math.cos(ph)) * 1.20 * amp;
+
+  // While chasing, racket arm stays slightly raised in ready position
+  parts.rSh.rotation.set(-r * 0.22 * amp - 0.1, 0, 0.45);
+  parts.lSh.rotation.set(-l * 0.30 * amp,        0, 0.18);
+  parts.rElb.rotation.x = -0.85;
+  parts.lElb.rotation.x = -0.55;
+
+  parts.spine.rotation.set(-0.06, -r * 0.06 * amp, 0);
+  parts.neckGrp.rotation.set(0.06, 0, 0);
+  parts.rAnk.rotation.x = Math.max(0, r) * 0.20 * amp;
+  parts.lAnk.rotation.x = Math.max(0, l) * 0.20 * amp;
+}
+
+// ─── POSE: SWING (state-driven, biomechanical kinetic chain) ─
+const _SW_T1 = 0.10, _SW_T3 = SWING_CONTACT + 0.20, _SW_T4 = SWING_DURATION;
+function poseTennisSwing(P, parts, t) {
+  const lt = t - P.swingT0;
+  let bodyY, sZ, sX, eX, lsZ, lsX, leX, knee, hipShift;
+
+  if (lt < _SW_T1) {
+    const k = lt / _SW_T1;
+    bodyY = lerp(0.05, 0.20, k);
+    sZ = lerp(0.55, 0.70, k);
+    sX = lerp(-0.15, -0.20, k);
+    eX = lerp(-0.65, -0.30, k);
+    lsZ = 0.20; lsX = -0.50; leX = -0.55;
+    knee = 0.32; hipShift = 0;
+  } else if (lt < SWING_CONTACT) {
+    // Backswing — body coils, racket up-back-right
+    const k = ss((lt - _SW_T1) / (SWING_CONTACT - _SW_T1));
+    bodyY = lerp(0.20, 0.62, k);
+    sZ = lerp(0.70, 1.30, k);
+    sX = lerp(-0.20, 0.55, k);
+    eX = lerp(-0.30, 1.80, k);
+    lsZ = lerp(0.20, 0.10, k);
+    lsX = lerp(-0.50, -0.95, k);
+    leX = lerp(-0.55, -0.10, k);
+    knee = lerp(0.32, 0.44, k);
+    hipShift = lerp(0, 0.06, k);
+  } else if (lt < _SW_T3) {
+    // Forward swing through impact (linear, fast)
+    const k = (lt - SWING_CONTACT) / (_SW_T3 - SWING_CONTACT);
+    bodyY = lerp(0.62, -0.28, k);
+    sZ = lerp(1.30, 0.55, k);
+    sX = lerp(0.55, -0.55, k);
+    eX = lerp(1.80, -0.05, k);
+    lsZ = lerp(0.10, 0.30, k);
+    lsX = lerp(-0.95, -0.30, k);
+    leX = lerp(-0.10, -0.85, k);
+    knee = lerp(0.44, 0.20, k);
+    hipShift = lerp(0.06, -0.05, k);
+  } else {
+    // Follow-through → recover
+    const k = ss((lt - _SW_T3) / (_SW_T4 - _SW_T3));
+    bodyY = lerp(-0.28, 0.05, k);
+    sZ = lerp(0.55, 0.55, k);
+    sX = lerp(-0.55, -0.18, k);
+    eX = lerp(-0.05, -0.55, k);
+    lsZ = 0.30; lsX = lerp(-0.30, -0.50, k); leX = lerp(-0.85, -0.55, k);
+    knee = lerp(0.20, 0.30, k);
+    hipShift = lerp(-0.05, 0, k);
+  }
+
+  parts.spine.rotation.set(-0.10, bodyY * 0.45, -bodyY * 0.06);
+  parts.rSh.rotation.set(sX, 0, sZ);
+  parts.rElb.rotation.set(eX, 0, 0);
+  parts.lSh.rotation.set(lsX, 0, lsZ);
+  parts.lElb.rotation.set(leX, 0, 0);
+  parts.rHip.rotation.set(-knee * 0.55, 0, hipShift);
+  parts.lHip.rotation.set(-knee * 0.55, 0, hipShift);
+  parts.rKn.rotation.x = knee;
+  parts.lKn.rotation.x = knee;
+  parts.rAnk.rotation.x = -knee * 0.4;
+  parts.lAnk.rotation.x = -knee * 0.4;
+  parts.neckGrp.rotation.set(0.04, -bodyY * 0.5, 0);
+  // Body coil contributes a small y-rotation on top of the player's facing
+  parts.root.userData.swingBodyY = bodyY;
+}
+
+function applyTennisPose(P, parts, t) {
+  parts.allGroups.forEach(g => g.rotation.set(0, 0, 0));
+  parts.root.position.set(P.pos.x, parts.baseY, P.pos.z);
+  parts.root.rotation.set(0, P.facing, 0);
+  parts.root.userData.swingBodyY = 0;
+
+  if (P.swingT0 >= 0) {
+    poseTennisSwing(P, parts, t);
+  } else if (P.speed > 0.6) {
+    poseTennisRun(P, parts, t);
+  } else {
+    poseTennisReady(P, parts, t);
+  }
+  // Layer the swing body coil onto facing without disturbing world position
+  parts.root.rotation.y = P.facing + (parts.root.userData.swingBodyY || 0);
+}
+
+// ─── SCORE HUD ──────────────────────────────────────────────
+const scoreEl = document.getElementById('score');
+function updateScoreHUD() {
+  if (!scoreEl) return;
+  const tag = tennisGame.lastShotEnd
+    ? tennisGame.lastShotEnd + ' · ' + tennisGame.lastShotName
+    : tennisGame.lastShotName || 'RALLY';
+  scoreEl.innerHTML = `A ${tennisGame.scoreA} — ${tennisGame.scoreB} B<span class="shot">${tag}</span>`;
+}
+updateScoreHUD();
+
+// ─── ENTER / EXIT TENNIS MODE ───────────────────────────────
+function tennisEnter(t) {
+  if (courtGroup) courtGroup.visible = true;
+  // Reset positions and scores fresh each entry
+  tennisGame.A.pos.set(0, 0,  3.7); tennisGame.A.facing = Math.PI;
+  tennisGame.A.targetX = 0; tennisGame.A.targetZ = 3.7;
+  tennisGame.A.speed = 0; tennisGame.A.swingT0 = -1;
+  tennisGame.B.pos.set(0, 0, -3.7); tennisGame.B.facing = 0;
+  tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
+  tennisGame.B.speed = 0; tennisGame.B.swingT0 = -1;
+  tennisGame.scoreA = 0; tennisGame.scoreB = 0;
+  tennisGame.serveBy = 'A';
+  tennisGame.rallyEndsAt = t + 0.7;
+  tennisGame.lastShotName = '';
+  tennisGame.lastShotEnd = '';
+  ball.alive = false;
+  ballMesh.visible = false;
+  ballShadow.visible = false;
+  updateScoreHUD();
+}
+function tennisExit() {
+  if (courtGroup) courtGroup.visible = false;
+  ballMesh.visible = false;
+  ballShadow.visible = false;
+  ball.alive = false;
+  tennisGame.A.swingT0 = -1;
+  tennisGame.B.swingT0 = -1;
 }
 
 // ── Main break dispatcher  [14s cycle] ──
@@ -1186,9 +2054,11 @@ const _h3  = new THREE.Vector3(); // hand world pos
 const _e3  = new THREE.Vector3(); // elbow world pos
 const _m3  = new THREE.Vector3(); // forearm midpoint world pos
 
-// Ellipse semi-axes in spine local XZ; torso Y span
-const E_RX = 0.28, E_RZ = 0.20;  // x wider (side-to-side), z shallower (depth)
-const T_Y0 = -0.04, T_Y1 = 1.08; // bottom & top of torso in spine local
+// Ellipse semi-axes in spine local XZ; torso Y span.
+// Tightened to match the slimmer 0.245/0.225 torso geometry, with a small
+// margin so the clamp triggers BEFORE visible mesh penetration.
+const E_RX = 0.255, E_RZ = 0.19;
+const T_Y0 = -0.04, T_Y1 = 1.08;
 
 function _inTorso(worldPt) {
   _lv.copy(worldPt).applyMatrix4(_spineInv);
@@ -1204,15 +2074,16 @@ function _fixArm(hnd, elbGrp, shGrp, outwardZ) {
   _m3.set((_h3.x+_e3.x)*.5, (_h3.y+_e3.y)*.5, (_h3.z+_e3.z)*.5);
 
   if (_inTorso(_h3) || _inTorso(_m3) || _inTorso(_e3)) {
-    if (elbGrp.rotation.x > 0.05) {
-      // First: straighten elbow
-      elbGrp.rotation.x = Math.max(0, elbGrp.rotation.x - 0.45);
+    // First, try straightening the elbow (forearm flex is NEGATIVE in this
+    // codebase's convention, so "straighten" means pull rotation.x toward 0).
+    if (elbGrp.rotation.x < -0.05) {
+      elbGrp.rotation.x = Math.min(0, elbGrp.rotation.x + 0.45);
       elbGrp.rotation.z *= 0.40;
     } else {
-      // Elbow already straight → swing shoulder outward along z
+      // Elbow already straight → abduct the shoulder away from the torso
       shGrp.rotation.z += outwardZ * 0.22;
     }
-    return true; // still needs checking next iteration
+    return true;
   }
   return false;
 }
@@ -1221,8 +2092,11 @@ function clampArmsThroughBody() {
   for (let i = 0; i < 7; i++) {
     scene.updateMatrixWorld(true);
     _spineInv.copy(spine.matrixWorld).invert();
-    const rP = _fixArm(rHnd, rElb, rSh, -1); // right: outward = more negative z
-    const lP = _fixArm(lHnd, lElb, lSh, +1); // left:  outward = more positive z
+    // Outward sign FIXED: rSh.z POSITIVE = right arm abducts to its right;
+    // lSh.z NEGATIVE = left arm abducts to its left. Previously these were
+    // reversed and the clamp was pushing arms further INTO the torso.
+    const rP = _fixArm(rHnd, rElb, rSh, +1); // right: outward = positive z
+    const lP = _fixArm(lHnd, lElb, lSh, -1); // left:  outward = negative z
     if (!rP && !lP) break; // both clear → stop early
   }
 }
@@ -1234,38 +2108,66 @@ function clampArmsThroughBody() {
 const _wp = new THREE.Vector3();
 
 function applyGroundCollision() {
+  applyGroundCollisionFor({
+    root, rFoot, lFoot, rHnd, lHnd, racket
+  });
+}
+
+function applyGroundCollisionFor(P) {
   scene.updateMatrixWorld(true);
   let minY = Infinity;
-  _groundProbes.forEach(obj => {
+  [P.rFoot, P.lFoot, P.rHnd, P.lHnd].forEach(obj => {
     obj.getWorldPosition(_wp);
     if (_wp.y < minY) minY = _wp.y;
   });
-  const FLOOR = 0.04; // tiny clearance so feet sit ON the floor
+  if (mode === 'tennis' && P.racket && P.racket.userData.tip) {
+    P.racket.userData.tip.getWorldPosition(_wp);
+    if (_wp.y < minY) minY = _wp.y;
+  }
+  const FLOOR = 0.04;
   if (minY < FLOOR) {
-    root.position.y += (FLOOR - minY);
+    P.root.position.y += (FLOOR - minY);
   }
 }
 
+let _lastT = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
   const t = ts * 0.001;
+  const dt = Math.min(0.05, Math.max(0.001, t - _lastT));
+  _lastT = t;
 
-  resetPose();
-  switch(mode) {
-    case 'idle':  animIdle(t);  break;
-    case 'walk':  animWalk(t);  break;
-    case 'wave':  animWave(t);  break;
-    case 'dance': animDance(t); break;
-    case 'run':   animRun(t);   break;
-    case 'break':    animBreak(t);    break;
-    case 'sixseven': animSixSeven(t); break;
+  // ─── TENNIS MODE: physics-driven rally for both players ───
+  if (mode === 'tennis') {
+    if (playerB) {
+      playerB.root.visible = true;
+      if (playerB.racket) playerB.racket.visible = true;
+    }
+    tennisTick(t, dt);
+    applyTennisPose(tennisGame.A, playerA, t);
+    if (playerB) applyTennisPose(tennisGame.B, playerB, t);
+    if (racket) racket.visible = true;
+    applyGroundCollision();
+    if (playerB) applyGroundCollisionFor(playerB);
+  } else {
+    // ─── SOLO MODES ──────────────────────────────────────────
+    resetPose();
+    switch (mode) {
+      case 'idle':  animIdle(t);  break;
+      case 'walk':  animWalk(t);  break;
+      case 'wave':  animWave(t);  break;
+      case 'dance': animDance(t); break;
+      case 'run':   animRun(t);   break;
+      case 'break': animBreak(t); break;
+    }
+    if (racket) racket.visible = false;
+    if (mode !== 'break') clampArmsThroughBody();
+    applyGroundCollision();
+    if (playerB) {
+      playerB.root.visible = false;
+      if (playerB.racket) playerB.racket.visible = false;
+    }
   }
-
-  // Arm penetration clamp — runs after every animation
-  clampArmsThroughBody();
-
-  // Ground collision — runs after every animation
-  applyGroundCollision();
 
   // Animated lights
   cyanLight.intensity = 1.3 + Math.sin(t*2.3)*0.2;
@@ -1275,7 +2177,12 @@ function loop(ts) {
   const cy = camR * Math.sin(camPhi) + 2;
   const cz = camR * Math.cos(camTheta) * Math.cos(camPhi);
   camera.position.set(cx, cy, cz);
-  camera.lookAt(0, 1.8, 0);
+  if (mode === 'tennis') {
+    // Frame both baselines and the net
+    camera.lookAt(0, 1.4, 0);
+  } else {
+    camera.lookAt(0, 2.1, 0);
+  }
 
   // Resize
   const w = canvas.clientWidth, h = canvas.clientHeight;
