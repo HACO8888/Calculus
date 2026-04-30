@@ -569,6 +569,12 @@ function buildRacket() {
   g.add(tip);
   g.userData.tip = tip;
 
+  // Sweet-spot marker — center of the strings, used for ball-contact snap
+  const sweet = new THREE.Object3D();
+  sweet.position.y = -0.50;
+  g.add(sweet);
+  g.userData.sweet = sweet;
+
   return g;
 }
 
@@ -1674,9 +1680,13 @@ function movePlayer(P, dt) {
 }
 
 // ─── SWING TIMING ───────────────────────────────────────────
+// SWING_CONTACT marks the *pose* boundary between backswing and forward swing
+// (peak coil). Actual ball impact happens later, at the apex of the forward
+// swing when the racket is in front of the body — that's SWING_IMPACT.
 const SWING_DURATION = 0.92;
-const SWING_CONTACT  = 0.42;   // contact moment within the swing
-const SWING_LOOKAHEAD = SWING_CONTACT;
+const SWING_CONTACT  = 0.42;
+const SWING_IMPACT   = 0.60;
+const SWING_LOOKAHEAD = SWING_IMPACT;
 
 function triggerSwing(P, t, name) {
   P.swingT0 = t;
@@ -1694,21 +1704,33 @@ function triggerSwing(P, t, name) {
   P.swingTarget = { x: tx, z: tz, apex: sp.apex };
 }
 
+const _racketHit = new THREE.Vector3();
 function resolveSwing(P, t, name) {
   if (P.swingT0 < 0) return;
   const lt = t - P.swingT0;
-  if (!P.contactDone && lt >= SWING_CONTACT) {
-    const racket = computeRacketPos(P);
-    const dxz = Math.hypot(ball.pos.x - racket.x, ball.pos.z - racket.z);
-    const yOK = ball.pos.y > 0.30 && ball.pos.y < 2.05;
-    if (dxz < COURT.RACKET_REACH * 1.15 && yOK && ball.alive) {
-      const start = ball.pos.clone();
+  if (!P.contactDone && lt >= SWING_IMPACT) {
+    // Read the racket's *actual* world position at this exact frame so the
+    // visual contact lines up with the geometry the player can see, instead
+    // of a static offset estimate from the pelvis.
+    const parts = (name === 'A') ? playerA : playerB;
+    if (parts && parts.racket && parts.racket.userData.sweet) {
+      scene.updateMatrixWorld(true);
+      parts.racket.userData.sweet.getWorldPosition(_racketHit);
+    } else {
+      const est = computeRacketPos(P);
+      _racketHit.set(est.x, est.y, est.z);
+    }
+    const dxz = Math.hypot(ball.pos.x - _racketHit.x, ball.pos.z - _racketHit.z);
+    const yOK = ball.pos.y > 0.25 && ball.pos.y < 2.30;
+    if (dxz < COURT.RACKET_REACH * 1.30 && yOK && ball.alive) {
+      // Snap the ball to the racket head — visually the racket *is* striking
+      // the ball, then the ball flies away on the new trajectory.
+      ball.pos.copy(_racketHit);
       const target = new THREE.Vector3(P.swingTarget.x, COURT.BALL_R, P.swingTarget.z);
-      const v = buildShotVelocity(start, target, P.swingTarget.apex);
+      const v = buildShotVelocity(ball.pos, target, P.swingTarget.apex);
       ball.vel.copy(v);
       ball.hitter = name;
       ball.bounces = 0;
-      // Visual spin axis perpendicular to motion
       ball.spinAxis.set(-v.z, 0, v.x).normalize();
       ball.spinRate = (P.swingShot === 'topspin') ? 28
                     : (P.swingShot === 'slice')   ? -22
@@ -1775,10 +1797,14 @@ function tennisTick(t, dt) {
     tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
     movePlayer(tennisGame.A, dt);
     movePlayer(tennisGame.B, dt);
+    applyTennisPose(tennisGame.A, playerA, t);
+    if (playerB) applyTennisPose(tennisGame.B, playerB, t);
     return;
   }
   if (!ball.alive) {
     serveRally(t);
+    applyTennisPose(tennisGame.A, playerA, t);
+    if (playerB) applyTennisPose(tennisGame.B, playerB, t);
     return;
   }
 
@@ -1853,6 +1879,12 @@ function tennisTick(t, dt) {
       triggerSwing(R, t, recvName);
     }
   }
+
+  // Apply this frame's pose BEFORE resolveSwing so the racket's world matrix
+  // reflects the current swing phase — otherwise getWorldPosition reads stale
+  // rotations from the previous frame and the snap-to-racket lands slightly off.
+  applyTennisPose(tennisGame.A, playerA, t);
+  if (playerB) applyTennisPose(tennisGame.B, playerB, t);
 
   resolveSwing(tennisGame.A, t, 'A');
   resolveSwing(tennisGame.B, t, 'B');
@@ -2144,9 +2176,8 @@ function loop(ts) {
       playerB.root.visible = true;
       if (playerB.racket) playerB.racket.visible = true;
     }
+    // tennisTick now applies pose internally before resolving contact
     tennisTick(t, dt);
-    applyTennisPose(tennisGame.A, playerA, t);
-    if (playerB) applyTennisPose(tennisGame.B, playerB, t);
     if (racket) racket.visible = true;
     applyGroundCollision();
     if (playerB) applyGroundCollisionFor(playerB);
