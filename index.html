@@ -750,18 +750,17 @@ const FORMULAS = [
       ['spine.y', '<em>sin</em>(ωt) × 0.07'],
     ]},
   ]},
-  { key:'wave', title:'WAVE  ω=3.5', sections:[
+  { key:'wave', title:'WAVE  ω=3.4', sections:[
     { name:'R Shoulder', rows:[
-      ['rSh.z',   '−1.52 + <em>sin</em>(ωt) × 0.22'],
-      ['rSh.x',   '0.1'],
+      ['rSh.z',   '2.55 + <em>sin</em>(ωt) × 0.32'],
+      ['rSh.x',   '−0.18'],
     ]},
     { name:'R Elbow', rows:[
-      ['rElb.z',  '−0.35 + <em>sin</em>(ωt+0.6) × 0.18'],
-      ['rElb.x',  '0.12'],
+      ['rElb.x',  '−1.30 + <em>sin</em>(ωt/2) × 0.06'],
     ]},
     { name:'L Arm', rows:[
-      ['lSh.z',   '+0.18'],
-      ['lElb.x',  '0.08'],
+      ['lSh.z',   '+0.06'],
+      ['lElb.x',  '−0.10'],
     ]},
     { name:'Body', rows:[
       ['y',       'BASE + <em>sin</em>(0.85t) × 0.022'],
@@ -1090,20 +1089,22 @@ function animWalk(t) {
 }
 
 // ── Wave ──
-// Right arm RAISED to the right side (rSh.z ~ +90°), forearm bent ~80° forward
-// so the hand sits by the face. Wrist oscillation produces the side-to-side
-// wave motion. No reliance on collision clamp — pose is anatomically clean.
+// Right arm raised diagonally up-and-out with forearm bent forward so the hand
+// sits near face height. The whole arm sweeps side-to-side at the shoulder
+// (windshield-wiper motion) — this is what produces the *visible* wave; trying
+// to twist at the elbow's local Y leaves the hand on the rotation axis and
+// produces almost no apparent movement.
 function animWave(t) {
   animIdle(t);
-  const sp = 3.6;
-  // Upper arm extended out and slightly above horizontal
-  rSh.rotation.z = 1.55 + Math.sin(t * sp * 0.5) * 0.04;
-  rSh.rotation.x = -0.12;
+  const sp = 3.4;
+  const sw = Math.sin(t * sp);
+  // Upper arm raised ~145° around z (well above horizontal) and sweeps ±18°.
+  rSh.rotation.z = 2.55 + sw * 0.32;
+  rSh.rotation.x = -0.18;
   rSh.rotation.y = 0;
-  // Forearm flexed forward ~80° (NEGATIVE in our convention)
-  rElb.rotation.x = -1.40;
-  // Wave: oscillate around the elbow's local Y to swing the hand side-to-side
-  rElb.rotation.y = Math.sin(t * sp) * 0.45;
+  // Forearm flexed ~75° forward; tiny breathing oscillation for life
+  rElb.rotation.x = -1.30 + Math.sin(t * sp * 0.5) * 0.06;
+  rElb.rotation.y = 0;
   rElb.rotation.z = 0;
   // Left arm relaxed
   lSh.rotation.z = ARM_HANG_Z;
