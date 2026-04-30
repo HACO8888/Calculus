@@ -938,7 +938,7 @@ document.querySelectorAll('.btn').forEach(btn => {
     btn.classList.add('active');
     renderFormulas(mode);
     document.body.classList.toggle('tennis-mode', mode === 'tennis');
-    if (mode === 'tennis' && !playerB) setCharacterB(currentCharB);
+    if (mode === 'tennis' && !playerB) pickCharacterB(currentCharB);
     // Pull camera back when first entering tennis so both players fit
     if (mode === 'tennis' && prevMode !== 'tennis') {
       camR = Math.max(camR, 11);
