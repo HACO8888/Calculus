@@ -1662,6 +1662,7 @@ function makeRallyState(side) {
     pos: new THREE.Vector3(0, 0, side * 3.6),
     facing: side > 0 ? Math.PI : 0,      // A faces -z, B faces +z
     targetX: 0, targetZ: side * 3.6,
+    vx: 0, vz: 0,                         // actual instantaneous velocity (m/s)
     speed: 0, runPhase: 0,
     swingT0: -1,
     swingShot: null,
@@ -1840,21 +1841,34 @@ function movePlayer(P, dt) {
   const dz = P.targetZ - P.pos.z;
   const d = Math.hypot(dx, dz);
   const FACE = P.side > 0 ? Math.PI : 0;
-  if (d > 0.04) {
-    // Smooth ramp: full speed when far, decelerate as we close in
-    const v = Math.min(4.8, d * 5.0);
-    P.speed = v;
-    const stepMax = v * dt;
-    const step = Math.min(stepMax, d);
-    P.pos.x += (dx / d) * step;
-    P.pos.z += (dz / d) * step;
-    // Mostly face opponent; slight lean toward direction of motion
-    const motionDir = Math.atan2(dx, dz);
-    P.facing = lerpAngle(P.facing, lerpAngle(FACE, motionDir, 0.35), dt * 6);
-    P.runPhase += v * dt * 2.6;
+
+  // Acceleration-based movement: no instant velocity changes → no sliding.
+  // Per real-tennis footwork research: max ~5.5 m/s, ~18 m/s² accel/decel.
+  const MAX_SPEED = 5.5, ACCEL = 18, DECEL = 22;
+  // Target velocity tapers as we approach destination so we plant cleanly.
+  const tapered = Math.sqrt(2 * DECEL * Math.max(d - 0.04, 0));
+  const desSpeed = Math.min(MAX_SPEED, tapered);
+  let dvx, dvz;
+  if (d > 0.01) {
+    dvx = (dx / d) * desSpeed - P.vx;
+    dvz = (dz / d) * desSpeed - P.vz;
   } else {
-    P.pos.x = P.targetX; P.pos.z = P.targetZ;
-    P.speed *= Math.exp(-dt * 6);
+    dvx = -P.vx; dvz = -P.vz;
+  }
+  const dvMag = Math.hypot(dvx, dvz);
+  const maxDV = ACCEL * dt;
+  if (dvMag > maxDV) { dvx *= maxDV / dvMag; dvz *= maxDV / dvMag; }
+  P.vx += dvx; P.vz += dvz;
+  P.pos.x += P.vx * dt;
+  P.pos.z += P.vz * dt;
+  P.speed = Math.hypot(P.vx, P.vz);
+
+  if (P.speed > 0.15) {
+    const motionDir = Math.atan2(P.vx, P.vz);
+    P.facing = lerpAngle(P.facing, lerpAngle(FACE, motionDir, 0.35), dt * 6);
+    // Foot-frequency tied to actual displacement → no foot-slide
+    P.runPhase += P.speed * dt * 2.6;
+  } else {
     P.facing = lerpAngle(P.facing, FACE, dt * 7);
   }
   // Keep player on own side of the net (slight margin)
@@ -1890,28 +1904,50 @@ function triggerSwing(P, t, name) {
 }
 
 const _racketHit = new THREE.Vector3();
+const _magnet = new THREE.Vector3();
+
+// Smooth ball-to-racket attraction over the last ~180ms before contact.
+// Replaces the old single-frame snap (visible teleport) with a curve the
+// eye reads as "racket caught the ball" rather than "ball jumped". Per
+// game research: blend over 4-8 frames, never single-frame.
+const MAGNET_WINDOW = 0.18;
+function magnetizeSwingBall(P, t, name) {
+  if (P.swingT0 < 0 || !ball.alive || ball.serving || P.contactDone) return;
+  const lt = t - P.swingT0;
+  if (lt < SWING_IMPACT - MAGNET_WINDOW || lt >= SWING_IMPACT) return;
+  const parts = (name === 'A') ? playerA : playerB;
+  if (!parts || !parts.racket || !parts.racket.userData.sweet) return;
+  parts.racket.userData.sweet.getWorldPosition(_magnet);
+  // Don't pull from absurd distances (player whiffed) — only nudge if
+  // ball was already going to be near the racket.
+  const dist = ball.pos.distanceTo(_magnet);
+  if (dist > 1.6) return;
+  const k = (lt - (SWING_IMPACT - MAGNET_WINDOW)) / MAGNET_WINDOW;
+  const w = k * k * 0.55;                  // ease-in
+  ball.pos.x += (_magnet.x - ball.pos.x) * w;
+  ball.pos.y += (_magnet.y - ball.pos.y) * w;
+  ball.pos.z += (_magnet.z - ball.pos.z) * w;
+}
+
 function resolveSwing(P, t, name) {
   if (P.swingT0 < 0) return;
   const lt = t - P.swingT0;
   if (!P.contactDone && lt >= SWING_IMPACT) {
-    // Read the racket's *actual* world position at this exact frame so the
-    // visual contact lines up with the geometry the player can see, instead
-    // of a static offset estimate from the pelvis.
     const parts = (name === 'A') ? playerA : playerB;
     if (parts && parts.racket && parts.racket.userData.sweet) {
       scene.updateMatrixWorld(true);
       parts.racket.userData.sweet.getWorldPosition(_racketHit);
     } else {
-      const fallbackParts = (name === 'A') ? playerA : playerB;
-      const est = computeRacketPos(P, fallbackParts);
+      const est = computeRacketPos(P, parts);
       _racketHit.set(est.x, est.y, est.z);
     }
     const dxz = Math.hypot(ball.pos.x - _racketHit.x, ball.pos.z - _racketHit.z);
     const yOK = ball.pos.y > 0.25 && ball.pos.y < 2.30;
     if (dxz < COURT.RACKET_REACH * 1.30 && yOK && ball.alive) {
-      // Snap the ball to the racket head — visually the racket *is* striking
-      // the ball, then the ball flies away on the new trajectory.
-      ball.pos.copy(_racketHit);
+      // Magnetism over the last ~180ms has already pulled the ball onto the
+      // racket head. Tighten the last few cm with a gentle lerp (no hard
+      // snap) and apply the shot velocity.
+      ball.pos.lerp(_racketHit, 0.5);
       const target = new THREE.Vector3(P.swingTarget.x, COURT.BALL_R, P.swingTarget.z);
       const v = buildShotVelocity(ball.pos, target, P.swingTarget.apex);
       ball.vel.copy(v);
@@ -1973,8 +2009,13 @@ const SERVE_END          = 1.55;
 function serveRally(t) {
   const server = tennisGame.serveBy;
   const S = tennisGame[server];
-  // Place server on baseline center for the serve
-  S.pos.x = 0; S.pos.z = S.side * 3.7;
+  // Server may have walked back during the rally pause — only snap if they're
+  // still off-position (avoids the visible "jump to baseline" teleport).
+  const homeZ = S.side * 3.7;
+  if (Math.hypot(S.pos.x, S.pos.z - homeZ) > 0.5) {
+    S.pos.x = 0; S.pos.z = homeZ;
+    S.vx = 0; S.vz = 0;
+  }
   S.facing = S.side > 0 ? Math.PI : 0;
   S.targetX = S.pos.x; S.targetZ = S.pos.z;
   S.speed = 0;
@@ -2045,11 +2086,23 @@ function serveTick(t) {
     ball.pos.x = lerp(rp.x, S.pos.x, k);
     ball.pos.z = lerp(rp.z, S.pos.z + (-S.side) * 0.20, k);
     ball.pos.y = rp.y + S.serveTossV0 * flightT - 0.5 * COURT.GRAV * flightT * flightT;
+    // Magnetize toward racket sweet-spot in the last ~140ms before strike
+    // so contact is visually exact instead of a snap.
+    const remain = SERVE_STRIKE - tau;
+    if (remain < 0.14 && parts.racket && parts.racket.userData.sweet) {
+      parts.racket.userData.sweet.getWorldPosition(_serveWorld);
+      const m = 1 - (remain / 0.14);     // 0→1 as we approach strike
+      const w = m * m * 0.55;
+      ball.pos.x += (_serveWorld.x - ball.pos.x) * w;
+      ball.pos.y += (_serveWorld.y - ball.pos.y) * w;
+      ball.pos.z += (_serveWorld.z - ball.pos.z) * w;
+    }
   } else if (!S.serveStruck) {
-    // Strike frame — snap ball to the racket sweet-spot, give it serve vel.
+    // Strike frame — magnetism has already pulled ball ≈ onto sweet spot;
+    // tighten the last few cm gently rather than hard-snapping.
     if (parts.racket && parts.racket.userData.sweet) {
       parts.racket.userData.sweet.getWorldPosition(_serveWorld);
-      ball.pos.copy(_serveWorld);
+      ball.pos.lerp(_serveWorld, 0.6);
     }
     const target = { x: S.serveTarget.x, y: 0, z: S.serveTarget.z };
     const peak = Math.max(ball.pos.y + 0.08, S.serveTarget.apex);
@@ -2079,6 +2132,7 @@ function tennisTick(t, dt) {
     // Pose the rig before serveTick so lHnd's world matrix is fresh
     applyTennisPose(tennisGame.A, playerA, t);
     if (playerB) applyTennisPose(tennisGame.B, playerB, t);
+    scene.updateMatrixWorld(true);
     serveTick(t);
     ballMesh.position.copy(ball.pos);
     ballShadow.position.set(ball.pos.x, 0.01, ball.pos.z);
@@ -2095,6 +2149,7 @@ function tennisTick(t, dt) {
     movePlayer(tennisGame.B, dt);
     applyTennisPose(tennisGame.A, playerA, t);
     if (playerB) applyTennisPose(tennisGame.B, playerB, t);
+    scene.updateMatrixWorld(true);
     serveTick(t);
     ballMesh.position.copy(ball.pos);
     ballShadow.position.set(ball.pos.x, 0.01, ball.pos.z);
@@ -2157,20 +2212,30 @@ function tennisTick(t, dt) {
   // dominant side at the contact frame — a player who runs onto the ball
   // would actually swing past it.
   const recvParts = (recvName === 'A') ? playerA : playerB;
-  const intercept = predictIntercept(R.side);
   const FACE = R.side > 0 ? Math.PI : 0;
-  const _o = impactRacketOffset(recvParts);
-  const _ang = FACE + _o.bodyY;
-  const _c = Math.cos(_ang), _s = Math.sin(_ang);
-  const _offX = _o.lx * _c + _o.lz * _s;
-  const _offZ = -_o.lx * _s + _o.lz * _c;
-  R.targetX = _clamp(intercept.x - _offX, -COURT.HALF_W * 1.10, COURT.HALF_W * 1.10);
-  R.targetZ = R.side > 0
-    ? _clamp(intercept.z - _offZ,  0.6,  COURT.HALF_L + 0.6)
-    : _clamp(intercept.z - _offZ, -COURT.HALF_L - 0.6, -0.6);
+  // Mid-swing: PLANT, don't chase. Real players commit to the strike; sliding
+  // mid-swing is the visible bug we're killing.
+  if (R.swingT0 < 0) {
+    const intercept = predictIntercept(R.side);
+    const _o = impactRacketOffset(recvParts);
+    const _ang = FACE + _o.bodyY;
+    const _c = Math.cos(_ang), _s = Math.sin(_ang);
+    const _offX = _o.lx * _c + _o.lz * _s;
+    const _offZ = -_o.lx * _s + _o.lz * _c;
+    R.targetX = _clamp(intercept.x - _offX, -COURT.HALF_W * 1.10, COURT.HALF_W * 1.10);
+    R.targetZ = R.side > 0
+      ? _clamp(intercept.z - _offZ,  0.6,  COURT.HALF_L + 0.6)
+      : _clamp(intercept.z - _offZ, -COURT.HALF_L - 0.6, -0.6);
+  } else {
+    R.targetX = R.pos.x; R.targetZ = R.pos.z;
+  }
 
-  O.targetX = ball.pos.x * 0.25;       // shade slightly toward where ball is
-  O.targetZ = O.side * 3.5;
+  if (O.swingT0 < 0) {
+    O.targetX = ball.pos.x * 0.25;     // shade slightly toward where ball is
+    O.targetZ = O.side * 3.5;
+  } else {
+    O.targetX = O.pos.x; O.targetZ = O.pos.z;
+  }
 
   movePlayer(tennisGame.A, dt);
   movePlayer(tennisGame.B, dt);
@@ -2199,6 +2264,13 @@ function tennisTick(t, dt) {
   // rotations from the previous frame and the snap-to-racket lands slightly off.
   applyTennisPose(tennisGame.A, playerA, t);
   if (playerB) applyTennisPose(tennisGame.B, playerB, t);
+  // updateMatrixWorld so .sweet.getWorldPosition reads this frame's rig
+  scene.updateMatrixWorld(true);
+
+  // Pull ball gently toward racket over the last ~180ms before contact —
+  // kills the impact-frame teleport.
+  magnetizeSwingBall(tennisGame.A, t, 'A');
+  if (playerB) magnetizeSwingBall(tennisGame.B, t, 'B');
 
   resolveSwing(tennisGame.A, t, 'A');
   resolveSwing(tennisGame.B, t, 'B');
@@ -2550,7 +2622,7 @@ function applyTennisPose(P, parts, t) {
 
   if (P.swingT0 >= 0) {
     poseTennisSwing(P, parts, t);
-  } else if (P.speed > 0.6) {
+  } else if (P.speed > 0.15) {
     poseTennisRun(P, parts, t);
   } else {
     poseTennisReady(P, parts, t);
@@ -2564,10 +2636,12 @@ function tennisEnter(t) {
   if (courtGroup) courtGroup.visible = true;
   tennisGame.A.pos.set(0, 0,  3.7); tennisGame.A.facing = Math.PI;
   tennisGame.A.targetX = 0; tennisGame.A.targetZ = 3.7;
+  tennisGame.A.vx = 0; tennisGame.A.vz = 0;
   tennisGame.A.speed = 0; tennisGame.A.swingT0 = -1;
   tennisGame.A.serveT0 = -1; tennisGame.A.serveStruck = false;
   tennisGame.B.pos.set(0, 0, -3.7); tennisGame.B.facing = 0;
   tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
+  tennisGame.B.vx = 0; tennisGame.B.vz = 0;
   tennisGame.B.speed = 0; tennisGame.B.swingT0 = -1;
   tennisGame.B.serveT0 = -1; tennisGame.B.serveStruck = false;
   tennisGame.serveBy = 'A';
