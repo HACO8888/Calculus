@@ -148,21 +148,6 @@
   body.tennis-mode .b-only { display:inline-block; }
   body.tennis-mode #char-bar { gap:6px; }
 
-  /* Tennis HUD */
-  #score {
-    position:fixed; top:60px; left:50%; transform:translateX(-50%);
-    display:none;
-    font-family:'Courier New',monospace; font-size:13px; letter-spacing:5px;
-    color:#00ffaa; background:#040911cc;
-    border:1px solid #00ffaa44; padding:6px 18px;
-    z-index:5;
-  }
-  body.tennis-mode #score { display:block; }
-  #score .shot {
-    display:block; font-size:9px; letter-spacing:3px;
-    color:#ffcc44aa; margin-top:4px;
-  }
-
   /* Scanline overlay */
   #overlay {
     position:fixed; inset:0; pointer-events:none;
@@ -204,7 +189,6 @@
 <div id="label">MODE: IDLE</div>
 <div id="hint" style="top:auto;bottom:70px;font-size:9px;">DRAG旋轉 · SCROLL縮放 · 1-7模式 · SPACE暫停 · S慢動作 · ←→換角色</div>
 <div id="formulas"></div>
-<div id="score">A 0 — 0 B<span class="shot">RALLY</span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -903,7 +887,7 @@ const FORMULAS = [
       ['swing⇐',  '|p−racket| < 0.9'],
       ['         ', 'y ∈ [0.35, 1.85]'],
     ]},
-    { name:'Point ends', rows:[
+    { name:'Rally ends', rows:[
       ['out',     '|x|>HALF_W  ∨  bad side'],
       ['net',     '|z|<0.06  ∧  y<0.95'],
       ['miss',    'second bounce'],
@@ -1063,6 +1047,9 @@ const ARM_HANG_ELB = 0.0;
 function resetPose() {
   ALL_GROUPS.forEach(g => g.rotation.set(0,0,0));
   root.position.set(0, BASE_Y, 0);
+  // Reset Euler order to default — break mode uses YXZ for clean vertical-
+  // axis spinning; everything else uses XYZ.
+  if (root.rotation.order !== 'XYZ') root.rotation.order = 'XYZ';
   rSh.rotation.z = -ARM_HANG_Z;
   lSh.rotation.z =  ARM_HANG_Z;
   rElb.rotation.x = ARM_HANG_ELB;
@@ -1229,142 +1216,188 @@ const ss = x => x*x*(3-2*x);
 const clamp01 = x => Math.max(0, Math.min(1, x));
 const lerp = (a,b,t) => a+(b-a)*ss(clamp01(t));
 
-// Phase 1: Toprock  (0 – 3.5s)
+// Phase 1: Toprock  (0 – 2.5s)
+// Continuous-motion toprock: alternating leg swings (right forward as left
+// goes back, then mirror) at ~100 BPM, with the arms swinging counter to
+// the legs the way real b-boys do. A separate fast "beat hit" power curve
+// drives the bounce + chest pop on the downbeats. Smooth sin motion makes
+// it look like dancing instead of stepping through discrete poses.
 function breakToprock(t, lt) {
-  const sp = 3.2;
-  const beat = Math.abs(Math.sin(t * sp)); // 0-1 on beat
+  const sp = 3.0;                 // ~95 BPM (one full leg swing per 1.05s)
+  const ph = t * sp;              // continuous phase
+  const swing = Math.sin(ph);     // -1..+1, drives leg alternation
+  const beat = Math.pow(Math.abs(Math.sin(ph)), 4);  // sharp 1's at sin = ±1
 
-  // Body bounce — sharp hit on beat
-  root.position.y = BASE_Y + Math.pow(beat, 3) * 0.14;
-  root.position.x = Math.sin(t * sp * 0.5) * 0.3;
+  // Bounce: dip mid-swing, rise on the beat hit
+  root.position.y = BASE_Y - 0.04 + 0.06 * beat;
+  // Slight lateral weight shift in phase with which leg is forward
+  root.position.x = swing * 0.12;
 
-  // Chest pop on beat
-  spine.rotation.x = -beat * 0.18;
-  spine.rotation.z = Math.sin(t * sp) * 0.18;
-  spine.rotation.y = Math.sin(t * sp * 0.6) * 0.22;
+  // Chest dynamics: forward press on beat, sway with the swing
+  spine.rotation.x = -beat * 0.14;
+  spine.rotation.z = -swing * 0.10;
+  spine.rotation.y =  swing * 0.20;       // shoulders rotate with stepping
 
-  // Head with attitude — nods hard on beat, looks side to side
-  neckGrp.rotation.x = -beat * 0.22;
-  neckGrp.rotation.y = Math.sin(t * sp * 0.5) * 0.35;
-  neckGrp.rotation.z = Math.sin(t * sp * 0.9) * 0.08;
+  // Head: nods on beat, looks toward leading foot
+  neckGrp.rotation.x = -beat * 0.18;
+  neckGrp.rotation.y =  swing * 0.28;
 
-  // Sharp cross-step footwork
-  const rs = Math.sin(t * sp), ls = -Math.sin(t * sp);
-  rHip.rotation.x =  rs * 0.62;
-  lHip.rotation.x =  ls * 0.62;
-  rHip.rotation.z =  Math.sin(t * sp * 0.5) * 0.18;
-  lHip.rotation.z = -Math.sin(t * sp * 0.5) * 0.18;
-  rKn.rotation.x  = Math.max(0,  rs) * 0.85;
-  lKn.rotation.x  = Math.max(0, -rs) * 0.85;
-  rAnk.rotation.x = Math.sin(t * sp + 0.5) * 0.2;
-  lAnk.rotation.x = Math.sin(t * sp - 0.5) * 0.2;
+  // ── Legs: alternating step-forward / step-back ──
+  // NEGATIVE hip.x = leg forward (per walk convention).
+  // When swing > 0 (right side leading), right leg goes BACK and left goes
+  // FORWARD — like a natural walking step. Knee bends on the back leg.
+  rHip.rotation.x =  swing * 0.45;
+  lHip.rotation.x = -swing * 0.45;
+  // Slight lateral (out-step) sway with the swing's slower envelope
+  rHip.rotation.z =  Math.sin(ph * 0.5) * 0.15;
+  lHip.rotation.z = -Math.sin(ph * 0.5) * 0.15;
+  // Knee bends on whichever leg is BACK (positive hip.x). Knee flex peaks
+  // mid-swing, so use the absolute swing value + max-of-zero.
+  rKn.rotation.x = Math.max(0,  swing) * 0.75;
+  lKn.rotation.x = Math.max(0, -swing) * 0.75;
+  rAnk.rotation.x = Math.sin(ph + 0.4) * 0.15;
+  lAnk.rotation.x = Math.sin(ph - 0.4) * 0.15;
 
-  // Arms: forearms held high at chest level (classic hip-hop guard stance),
-  // shoulders alternate forward swings on the beat. Less abducted than before
-  // so the silhouette isn't a stiff T-pose.
-  rSh.rotation.z = -0.18 + Math.sin(t * sp + 0.3) * 0.18;
-  lSh.rotation.z =  0.18 + Math.sin(t * sp + 0.3 + Math.PI) * 0.18;
-  rSh.rotation.x =  Math.cos(t * sp) * 0.55;
-  lSh.rotation.x = -Math.cos(t * sp) * 0.55;
-  // Heavy forearm flex (~80°) — forearms come up in front of the chest
-  rElb.rotation.x = -1.40 - Math.sin(t * sp * 1.8) * 0.20;
-  lElb.rotation.x = -1.40 - Math.cos(t * sp * 1.8) * 0.20;
-  // Subtle wrist roll on beat
-  rElb.rotation.z = Math.sin(t * sp * 2) * 0.18;
-  lElb.rotation.z = Math.sin(t * sp * 2 + 1) * 0.18;
+  // ── Arms: classic hip-hop guard, counter-rocking with the legs ──
+  // Forearms folded high in front of chest (~80° flex). Shoulders swing
+  // OPPOSITE to legs so opposite arm/leg pair leads (natural human gait).
+  rSh.rotation.z = -0.18 + Math.sin(ph * 0.5 + 1.2) * 0.18;
+  lSh.rotation.z =  0.18 + Math.sin(ph * 0.5 + 1.2 + Math.PI) * 0.18;
+  rSh.rotation.x = -swing * 0.45;        // counter to right leg
+  lSh.rotation.x =  swing * 0.45;        // counter to left leg
+  // Forearm flex with subtle pump on beat
+  rElb.rotation.x = -1.40 - 0.20 * beat;
+  lElb.rotation.x = -1.40 - 0.20 * beat;
+  // Wrist roll syncs with beat for that hip-hop "punch" attitude
+  rElb.rotation.z =  Math.sin(ph * 2) * 0.15;
+  lElb.rotation.z = -Math.sin(ph * 2) * 0.15;
 }
 
 // Phase 2: Windmill  (2.5 – 6s = 3.5s)
-// Body lies on its back; root.rotation.y becomes a roll around the body's
-// long axis (because rotation.x already laid the body flat under XYZ Euler
-// order). Legs are held in a wide static V — the body's roll itself sweeps
-// them through the air like helicopter blades, so we don't pump hip.x
-// (which used to swing legs through the floor).
+//
+// PHYSICS NOTE: rolling the body around its OWN long axis (rotation.y after
+// rotation.x=-π/2) causes a half-meter "bounce" twice per rotation — the
+// shoulder joints sit 0.5m from the spine, so when one rolls down the
+// body has to lift to keep it above the floor. That looks awful.
+//
+// So instead we keep the body LYING FLAT on its back the whole time and
+// rotate the WHOLE BODY around the vertical world-Y axis. The body becomes
+// a flat spinning disk on the floor. The illusion of the "body roll" comes
+// from the legs scissoring through the air in V-shape (the iconic windmill
+// silhouette) and small left/right rocks on the spine. No shoulder bounce.
+// We use Euler order 'YXZ' so rotation.y rotates the body BEFORE the lay-
+// flat tilt — i.e. around the WORLD Y axis, not the rolled body axis.
 function breakWindmill(t, lt) {
-  const spinAngle = lt * (Math.PI * 6 / 3.5);   // 3 full rolls in 3.5s
-  const dropIn = clamp01(lt * 5);
+  const spinAngle = lt * (Math.PI * 6 / 3.5);   // 3 full spins in 3.5s
+  const dropIn = clamp01(lt * 4);
 
-  root.position.y = lerp(BASE_Y, 0.10, dropIn);
   root.position.x = 0;
+  // Body height: just enough to keep the torso cylinder (radius ~0.235)
+  // above the floor (~0.04) plus a small margin for the back panel.
+  root.position.y = lerp(BASE_Y, 0.30, dropIn);
 
-  // Body fully on its back, then keep rolling. Tiny x oscillation gives the
-  // shoulder-to-shoulder rocking feel without breaking ground contact.
-  root.rotation.x = lerp(0, -Math.PI / 2 + 0.05, dropIn) + Math.sin(spinAngle) * 0.06;
-  root.rotation.y = spinAngle;
-  root.rotation.z = 0;
+  root.rotation.y = spinAngle;                              // spin around world Y
+  root.rotation.x = lerp(0, -Math.PI / 2 + 0.04, dropIn);   // lay flat on back
+  // Small rocking around the long axis to sell the "rolling" feel without
+  // committing to a full roll that would clip shoulders.
+  root.rotation.z = Math.sin(spinAngle * 2) * 0.10;
 
-  // LEGS: wide V-spread, knees slightly bent, ankles pointed. The body's
-  // roll does the actual sweeping; legs stay rigid in body-local frame.
-  const spread = 0.95 + Math.sin(spinAngle * 0.5) * 0.08;
-  rHip.rotation.x = 0.10;
-  lHip.rotation.x = 0.10;
-  rHip.rotation.z =  spread;
-  lHip.rotation.z = -spread;
-  rKn.rotation.x = 0.12 + Math.sin(spinAngle * 1.1) * 0.05;
-  lKn.rotation.x = 0.12 + Math.sin(spinAngle * 1.1 + Math.PI) * 0.05;
+  // LEGS — compass-cone twirl in body-local frame. With body laid flat on
+  // its back, body-+Z is "up" in world; hip.z opens the V sideways,
+  // hip.x (negative) lifts the leg up.  Each leg pumps spread+lift with
+  // opposite phases so the two legs alternate "high V" ↔ "lower kick".
+  // Combined with the body's spin around world Y, the foot traces a cone
+  // — the visual "compass twirl" of a real windmill.
+  const lp = spinAngle * 2;                  // legs pump 2x the body spin
+  const baseSpread = 1.00, spreadAmp = 0.18;
+  rHip.rotation.z =  baseSpread + spreadAmp * Math.cos(lp);
+  lHip.rotation.z = -baseSpread - spreadAmp * Math.cos(lp + Math.PI);
+  // Lift always negative (forward in body = up in world). Range -0.65 to
+  // -0.25 so legs stay clearly above floor through the whole oscillation.
+  rHip.rotation.x = -0.45 - 0.20 * Math.sin(lp);
+  lHip.rotation.x = -0.45 - 0.20 * Math.sin(lp + Math.PI);
+  rKn.rotation.x = 0.06;                     // nearly straight (don't sap momentum)
+  lKn.rotation.x = 0.06;
   rAnk.rotation.x = 0.05;
   lAnk.rotation.x = 0.05;
 
-  // ARMS: held wide for balance; one near-floor "anchor", the other up.
-  // Holding them roughly horizontal in body-local frame keeps them swinging
-  // safely above the body during roll instead of stabbing into the floor.
-  rSh.rotation.z = -0.55;
-  lSh.rotation.z =  0.55;
-  rSh.rotation.x =  Math.cos(spinAngle) * 0.30;
-  lSh.rotation.x = -Math.cos(spinAngle) * 0.30;
-  rElb.rotation.x = -0.55;
-  lElb.rotation.x = -0.55;
+  // ARMS: lifted up and folded across the chest — stays well clear of the
+  // floor. Body is on its back, so "forward in body frame" (negative
+  // shoulder.x) means UP in world space. Heavy elbow flex tucks hands
+  // near the chest so they don't extend past the spinning body.
+  rSh.rotation.z = -0.38;
+  lSh.rotation.z =  0.38;
+  rSh.rotation.x = -0.55;     // forward in body = UP in world (body on back)
+  lSh.rotation.x = -0.55;
+  rElb.rotation.x = -1.30;    // forearms folded toward chest
+  lElb.rotation.x = -1.30;
 
-  spine.rotation.x = Math.sin(spinAngle * 0.7) * 0.10;
-  neckGrp.rotation.y = -spinAngle * 0.25;
-  neckGrp.rotation.x = 0.08;
+  spine.rotation.x = Math.sin(spinAngle * 2) * 0.08;
+  spine.rotation.z = Math.sin(spinAngle * 2 + 0.8) * 0.05;
+  neckGrp.rotation.y = Math.sin(spinAngle) * 0.18;       // head turns with spin
+  neckGrp.rotation.x = 0.10;
 }
 
 // Phase 3: Headspin  (6 – 9.5s = 3.5s)
 // Strategy: root.rotation.x ≈ -π  →  body inverted, head at floor
 // root.position.y = 1.60  →  head world-y ≈ 0.07
 // root.rotation.y = continuous spin  →  body circles around head
+//
+// Power model: a real headspin is "pumped" by alternately tucking and
+// extending the legs — pulling the legs in spins faster (lower moment of
+// inertia), pushing them out slows it. We mimic that by phasing leg spread
+// with a slow oscillator so the silhouette pulses visibly.
 function breakHeadspin(t, lt) {
-  const spinSpeed = 6.5; // rad/s — about 1 rotation/second
+  const spinSpeed = 7.5; // rad/s — slightly faster than windmill (~1.2 rev/s)
   const spinAngle = lt * spinSpeed;
   const spinIn = clamp01(lt * 3.5);
 
-  // Continuity with windmill end: start at body-on-back (y≈0.10, rot.x≈-π/2)
+  // Continuity with windmill end: start at body-on-back (y≈0.30, rot.x≈-π/2)
   // and rotate the rest of the way past vertical-up into full inversion.
-  root.position.y = lerp(0.10, 1.60, spinIn);
+  root.position.y = lerp(0.30, 1.60, spinIn);
   root.rotation.x = lerp(-Math.PI / 2 + 0.05, -(Math.PI - 0.22), spinIn);
   root.rotation.y = spinAngle;
-  root.rotation.z = Math.sin(spinAngle * 0.12) * 0.05; // tiny precession wobble
+  root.rotation.z = Math.sin(spinAngle * 0.12) * 0.04; // tiny precession wobble
 
-  // LEGS: V-spread upward  (in inverted frame local-down = world-up)
-  const spread = 0.65 + Math.sin(lt * 2.8) * 0.14;
+  // LEGS: V-spread upward (in inverted frame local-down = world-up).
+  // Pump the spread with a 1.6Hz oscillation — visibly drives the spin.
+  const pump = Math.sin(lt * 1.6 * Math.PI * 2);   // -1..+1
+  const spread = 0.85 + pump * 0.20;
   rHip.rotation.z =  spread;
   lHip.rotation.z = -spread;
-  rHip.rotation.x = Math.sin(lt * 3.2 + 0.4) * 0.28;
-  lHip.rotation.x = Math.sin(lt * 3.2 + 0.4 + Math.PI) * 0.28;
-  rKn.rotation.x = 0.28 + Math.sin(lt * 4.5) * 0.12;
-  lKn.rotation.x = 0.28 + Math.sin(lt * 4.5 + Math.PI) * 0.12;
-  rAnk.rotation.x = Math.sin(lt * 5) * 0.15;
-  lAnk.rotation.x = Math.sin(lt * 5 + 1.2) * 0.15;
+  // Compass-twirl: legs scissor in the body's local YZ plane, opposite phase
+  // each leg, like spinning a math compass with both arms.
+  rHip.rotation.x =  Math.sin(spinAngle * 0.5) * 0.18;
+  lHip.rotation.x = -Math.sin(spinAngle * 0.5) * 0.18;
+  // Knees nearly straight when extended (spread > base), bent when tucked.
+  const tuck = clamp01(-pump);  // 0 when extended, 1 when tucked
+  rKn.rotation.x = 0.10 + tuck * 0.45;
+  lKn.rotation.x = 0.10 + tuck * 0.45;
+  rAnk.rotation.x = 0.05;
+  lAnk.rotation.x = 0.05;
 
-  // ARMS: spread for angular momentum control
-  rSh.rotation.z = -0.52 + Math.sin(spinAngle * 0.35) * 0.18;
-  lSh.rotation.z =  0.52 + Math.sin(spinAngle * 0.35 + 1.1) * 0.18;
-  rSh.rotation.x = Math.sin(spinAngle * 0.22) * 0.22;
-  lSh.rotation.x = Math.cos(spinAngle * 0.22) * 0.22;
-  rElb.rotation.x = -0.32 - Math.sin(lt * 2) * 0.1;
-  lElb.rotation.x = -0.32 - Math.sin(lt * 2 + 1) * 0.1;
+  // ARMS: tucked tighter against the chest for clean inverted silhouette,
+  // with a subtle spread oscillation. Tighter arms also lower the moment
+  // of inertia so the spin stays energetic.
+  rSh.rotation.z = -0.30;
+  lSh.rotation.z =  0.30;
+  rSh.rotation.x = 0.05 + Math.sin(spinAngle * 0.4) * 0.12;
+  lSh.rotation.x = 0.05 + Math.cos(spinAngle * 0.4) * 0.12;
+  rElb.rotation.x = -0.85 - tuck * 0.20;
+  lElb.rotation.x = -0.85 - tuck * 0.20;
 
   // Head: trails spin slightly, slight strain tilt
   neckGrp.rotation.y = -spinAngle * 0.04;
   neckGrp.rotation.x = 0.08;
-  spine.rotation.z = Math.sin(spinAngle * 0.18) * 0.07;
+  spine.rotation.z = Math.sin(spinAngle * 0.18) * 0.05;
 }
 
-// Phase 4: Air Chair Freeze  (9.5 – 11.5s = 2s)
+// Phase 4: Side-Chair Freeze  (9.5 – 11.5s = 2s)
 // Right arm acts as a vertical support pole; right hand is pinned to floor by
 // pinNodeToFloor(rHnd) in animBreak, so the choreography only needs to leave
 // the hand directly below the shoulder for a believable single-arm balance.
+// Body leans right ~25° with both legs swept to the air-side — the iconic
+// "L-kick" silhouette of a side chair freeze.
 function breakFreeze(t, lt) {
   // Snap-out from inversion happens fast (real freezes pop into place).
   // 0.18s un-inversion keeps the moment visually crisp and avoids a long
@@ -1372,75 +1405,137 @@ function breakFreeze(t, lt) {
   const fi = clamp01(lt * 5.5);
 
   root.position.y = lerp(1.60, 0.85, fi); // come down from inverted
-  root.rotation.y = 0; // STOP spinning — freeze!
-  root.rotation.x = lerp(-(Math.PI - 0.22), -0.20, fi);
-  root.rotation.z = lerp(0, 0.32, fi);    // mild right lean
+  // Decay the spin instead of snapping to 0 — preserves whatever rotation.y
+  // the headspin left us at, then eases to a fixed facing over the snap-out.
+  root.rotation.y = root.rotation.y * (1 - fi);
+  root.rotation.x = lerp(-(Math.PI - 0.22), -0.18, fi);
+  root.rotation.z = lerp(0, 0.42, fi);    // ~24° right lean — the support angle
 
-  // RIGHT arm: nearly straight down — the support pole.
-  rSh.rotation.z = lerp(-0.52, -0.32, fi);
-  rSh.rotation.x = lerp(0.22, 0.0, fi);
-  rElb.rotation.x = lerp(-0.32, -0.18, fi);
+  // RIGHT arm: vertical support pole. Shoulder presses straight down,
+  // elbow locked, hand pinned to floor — minimal flex so the "pole" reads.
+  rSh.rotation.z = lerp(-0.52, -0.20, fi);
+  rSh.rotation.x = lerp(0.22, -0.05, fi);
+  rElb.rotation.x = lerp(-0.32, -0.08, fi);  // nearly straight elbow
   rElb.rotation.z = 0;
 
-  // LEFT arm: dramatic counterbalance — reach up and out.
-  lSh.rotation.z = lerp(0.52, 1.45, fi);
-  lSh.rotation.x = lerp(0.22, -0.30, fi);
-  lElb.rotation.x = lerp(-0.32, -0.18, fi);
-  lElb.rotation.z = lerp(0, -0.20, fi);
+  // LEFT arm: dramatic counterbalance — reach up and across the body.
+  lSh.rotation.z = lerp(0.52, 1.55, fi);     // arm out wide
+  lSh.rotation.x = lerp(0.22, -0.45, fi);    // up and slightly back
+  lElb.rotation.x = lerp(-0.32, -0.25, fi);
+  lElb.rotation.z = lerp(0, -0.30, fi);
 
-  // RIGHT leg: kicked high and forward — visible silhouette of the freeze.
-  rHip.rotation.x = lerp(0.28, 1.55, fi);
-  rHip.rotation.z = lerp(0.65, -0.05, fi);
-  rKn.rotation.x  = lerp(0.28, 0.32, fi);
+  // RIGHT leg: kicked high and forward — clear silhouette over the body.
+  // Slight outward (z) so it doesn't pass through the inverted-forward torso.
+  rHip.rotation.x = lerp(0.28, 1.45, fi);
+  rHip.rotation.z = lerp(0.65, 0.15, fi);
+  rKn.rotation.x  = lerp(0.28, 0.18, fi);    // straight enough to look strong
 
-  // LEFT leg: tucked tight — knee folded almost flat so the foot rides
-  // close to the butt instead of dropping below the floor.
-  lHip.rotation.x = lerp(-0.28, -0.05, fi);
-  lHip.rotation.z = lerp(-0.65, -0.40, fi);
-  lKn.rotation.x  = lerp(0.28,  2.10, fi);
+  // LEFT leg: tucked tight — knee folded so foot rides near the butt
+  // (close, but not crossing through the right thigh).
+  lHip.rotation.x = lerp(-0.28, 0.45, fi);
+  lHip.rotation.z = lerp(-0.65, -0.55, fi);
+  lKn.rotation.x  = lerp(0.28,  2.20, fi);
   lAnk.rotation.x = lerp(0.15,  0.10, fi);
 
-  spine.rotation.x = lerp(0, -0.08, fi);
-  spine.rotation.z = lerp(0, -0.14, fi);
+  spine.rotation.x = lerp(0, -0.10, fi);
+  spine.rotation.z = lerp(0, -0.18, fi);
 
   // Hold strain: micro-shake grows over time
   const strain = clamp01((lt - 0.4) * 1.5);
   const wobble = (Math.sin(t * 11.3) * 0.014 + Math.sin(t * 7.1) * 0.008) * strain;
   spine.rotation.z  += wobble;
-  neckGrp.rotation.y = wobble * 3.0;
-  neckGrp.rotation.x = 0.10 + Math.sin(t * 6.5) * 0.03 * strain;
+  neckGrp.rotation.y = -0.20 + wobble * 3.0;   // glance under the arm
+  neckGrp.rotation.x = 0.08 + Math.sin(t * 6.5) * 0.03 * strain;
   rSh.rotation.x    += wobble * 1.5;
 }
 
 // Phase 5: Get Up  (11.5 – 14s = 2.5s)
-// Start values must match the new freeze rest pose so the transition is smooth.
+// Two-stage transition: first the freeze unwinds into a low crouch (legs
+// down, body forward), then the crouch springs up into the toprock stance.
+// Splitting the lerp avoids the "limp body slowly inflating into standing"
+// look you get from a single 2-second linear blend across all joints.
 function breakGetUp(t, lt) {
-  const ui = clamp01(lt / 1.8);
+  // Stage A (0..1.0s): freeze → squat. Stage B (1.0..1.8s): squat → stand.
+  const a = clamp01(lt / 1.0);
+  const b = clamp01((lt - 1.0) / 0.8);
 
-  root.position.y = lerp(0.85, BASE_Y + 0.14, ui);
-  root.rotation.x = lerp(-0.20, 0.04, ui);
-  root.rotation.z = lerp(0.32, 0, ui);
+  // SQUAT pose (intermediate target for Stage A, start for Stage B).
+  // Body crouched: feet planted, hips low, torso pitched forward, arms
+  // out forward for balance (forearm flex bends them up at chest level).
+  const SQ = {
+    rootY: BASE_Y - 0.55, rootX: -0.10, rootZ: 0.05,
+    spineX: 0.30,
+    rSh_z: -0.25, rSh_x: -0.45, rElb_x: -1.15,
+    lSh_z:  0.25, lSh_x: -0.45, lElb_x: -1.15,
+    rHip_x: -0.95, rHip_z: 0.10, rKn:  1.55, rAnk: -0.30,
+    lHip_x: -0.95, lHip_z:-0.10, lKn:  1.55, lAnk: -0.30,
+  };
 
-  rSh.rotation.z = lerp(-0.32, -0.52, ui);
-  lSh.rotation.z = lerp( 1.45,  0.52, ui);
-  rSh.rotation.x = lerp(0.0,  0.22, ui);
-  lSh.rotation.x = lerp(-0.30, 0.22, ui);
-  rElb.rotation.x = lerp(-0.18, -0.55, ui);
-  lElb.rotation.x = lerp(-0.18, -0.55, ui);
+  // STAND pose (toprock-ready)
+  const ST = {
+    rootY: BASE_Y, rootX: 0, rootZ: 0,
+    spineX: -0.08,
+    rSh_z: -0.22, rSh_x: 0.10, rElb_x: -1.45,
+    lSh_z:  0.22, lSh_x: 0.10, lElb_x: -1.45,
+    rHip_x: 0,  rHip_z: 0,  rKn: 0.08, rAnk: 0,
+    lHip_x: 0,  lHip_z: 0,  lKn: 0.08, lAnk: 0,
+  };
 
-  rHip.rotation.x = lerp(1.55,  0.1, ui);
-  lHip.rotation.x = lerp(-0.05, -0.1, ui);
-  rKn.rotation.x  = lerp(0.32,  0.08, ui);
-  lKn.rotation.x  = lerp(2.10,  0.08, ui);
-  spine.rotation.x = lerp(-0.08, -0.12, ui);
+  // Stage A: from freeze pose → squat
+  if (b <= 0) {
+    root.position.x = lerp(0,    SQ.rootX, a);
+    root.position.y = lerp(0.85, SQ.rootY, a);
+    root.rotation.x = lerp(-0.18, SQ.spineX * 0.5, a);  // body pitches forward
+    root.rotation.z = lerp(0.42, SQ.rootZ, a);
+    rSh.rotation.z = lerp(-0.20, SQ.rSh_z, a);
+    rSh.rotation.x = lerp(-0.05, SQ.rSh_x, a);
+    rElb.rotation.x = lerp(-0.08, SQ.rElb_x, a);
+    rElb.rotation.z = 0;
+    lSh.rotation.z = lerp(1.55, SQ.lSh_z, a);
+    lSh.rotation.x = lerp(-0.45, SQ.lSh_x, a);
+    lElb.rotation.x = lerp(-0.25, SQ.lElb_x, a);
+    lElb.rotation.z = lerp(-0.30, 0, a);
+    rHip.rotation.x = lerp(1.45, SQ.rHip_x, a);
+    rHip.rotation.z = lerp(0.15, SQ.rHip_z, a);
+    rKn.rotation.x  = lerp(0.18, SQ.rKn, a);
+    rAnk.rotation.x = lerp(0,    SQ.rAnk, a);
+    lHip.rotation.x = lerp(0.45, SQ.lHip_x, a);
+    lHip.rotation.z = lerp(-0.55, SQ.lHip_z, a);
+    lKn.rotation.x  = lerp(2.20, SQ.lKn, a);
+    lAnk.rotation.x = lerp(0.10, SQ.lAnk, a);
+    spine.rotation.x = lerp(-0.10, SQ.spineX, a);
+    spine.rotation.z = lerp(-0.18, 0, a);
+  } else {
+    // Stage B: squat → stand (springy ease-out).
+    const k = ss(b);
+    root.position.x = lerp(SQ.rootX, ST.rootX, k);
+    root.position.y = lerp(SQ.rootY, ST.rootY, k);
+    root.rotation.x = lerp(SQ.spineX * 0.5, ST.rootZ, k);
+    root.rotation.z = lerp(SQ.rootZ, ST.rootZ, k);
+    rSh.rotation.z = lerp(SQ.rSh_z, ST.rSh_z, k);
+    rSh.rotation.x = lerp(SQ.rSh_x, ST.rSh_x, k);
+    rElb.rotation.x = lerp(SQ.rElb_x, ST.rElb_x, k);
+    lSh.rotation.z = lerp(SQ.lSh_z, ST.lSh_z, k);
+    lSh.rotation.x = lerp(SQ.lSh_x, ST.lSh_x, k);
+    lElb.rotation.x = lerp(SQ.lElb_x, ST.lElb_x, k);
+    rHip.rotation.x = lerp(SQ.rHip_x, ST.rHip_x, k);
+    rHip.rotation.z = lerp(SQ.rHip_z, ST.rHip_z, k);
+    rKn.rotation.x  = lerp(SQ.rKn, ST.rKn, k);
+    rAnk.rotation.x = lerp(SQ.rAnk, ST.rAnk, k);
+    lHip.rotation.x = lerp(SQ.lHip_x, ST.lHip_x, k);
+    lHip.rotation.z = lerp(SQ.lHip_z, ST.lHip_z, k);
+    lKn.rotation.x  = lerp(SQ.lKn, ST.lKn, k);
+    lAnk.rotation.x = lerp(SQ.lAnk, ST.lAnk, k);
+    spine.rotation.x = lerp(SQ.spineX, ST.spineX, k);
+  }
 
-  if (ui > 0.65) {
-    const b = (ui - 0.65) / 0.35;
-    const sp = 3.2, beat = Math.abs(Math.sin(t * sp));
-    root.position.y = lerp(root.position.y, BASE_Y + Math.pow(beat, 3) * 0.14, b);
-    spine.rotation.z = Math.sin(t * sp) * 0.18 * b;
-    neckGrp.rotation.x = -beat * 0.22 * b;
-    neckGrp.rotation.y = Math.sin(t * sp * 0.5) * 0.35 * b;
+  // Settle into toprock bounce in the final stretch (last 0.5s of get-up)
+  if (lt > 2.0) {
+    const s = clamp01((lt - 2.0) / 0.5);
+    const sp = 2.0, beat = Math.pow(Math.abs(Math.sin(t * sp * 0.5)), 2);
+    root.position.y += s * (-0.05 * (1 - beat));
+    spine.rotation.z = s * Math.sin(t * sp * 0.5) * 0.12;
+    neckGrp.rotation.x = s * -beat * 0.18;
   }
 }
 
@@ -1582,22 +1677,13 @@ function makeRallyState(side) {
   };
 }
 
-// Real tennis scoring: each rally point feeds a game (0-15-30-40-game),
-// games feed a set (first to 4 games wins; 3-3 → tiebreak by next point),
-// the match ends after one set (best-of-1) so a casual viewer sees a
-// completed match in a few minutes. Reset by re-entering tennis mode.
-const SET_TARGET = 4;
+// No scoring — players just rally indefinitely. Server alternates each
+// rally so both sides get even time on the toss.
 const tennisGame = {
   A: makeRallyState(+1),
   B: makeRallyState(-1),
-  pointsA: 0, pointsB: 0,    // current game's points (0,1,2,3 = 0,15,30,40)
-  gamesA: 0,  gamesB: 0,
   serveBy: 'A',
   rallyEndsAt: -1,
-  lastShotName: '',
-  lastShotEnd: '',
-  matchOver: false,
-  matchWinner: null,
 };
 
 // ─── SHOT TYPES ─────────────────────────────────────────────
@@ -1701,16 +1787,42 @@ function predictIntercept(side) {
   return { x: ball.pos.x, z: ball.pos.z };
 }
 
-// Approximate the racket sweet-spot in world space for player P.
-// Stand-in: 0.4m forward of pelvis + 0.5m to dominant (right) side, at 1.0m height.
-function computeRacketPos(P) {
-  const f = P.facing;
-  const fwdX = Math.sin(f), fwdZ = Math.cos(f);
-  const rgtX =  Math.cos(f), rgtZ = -Math.sin(f);
+// Sweet-spot offset from pelvis at SWING_IMPACT, in body-local coordinates
+// (right=+x, forward=+z, world y). Computed analytically by composing the
+// rig transforms for the impact-phase pose values from poseTennisSwing:
+//   spine: (-0.10, bodyY*0.45=-0.09, ~0)   bodyY=-0.20 at impact
+//   rSh:   (sX=-0.45, 0, sZ=0.65)
+//   rElb:  (eX=-0.20, 0, 0)
+// then chained with hand offset (0,-0.55,0) + racket sweet (0,-0.62,0).
+// This is where the racket head ACTUALLY lands at the moment of contact —
+// far further forward and to the side than the static ready stance, so
+// the AI must position the player's pelvis ~1.3m back-and-left of the
+// predicted ball XZ for a forehand to land cleanly.
+const IMPACT_BODY_Y = -0.20;
+const IMPACT_OFF_LX = 1.516;
+const IMPACT_OFF_LZ = 0.997;
+const IMPACT_OFF_DY = -0.160;     // sweet-spot y offset from baseY
+function impactRacketOffset(parts) {
+  const s = (parts && parts.baseY) ? parts.baseY / 1.79 : 1.0;
+  return {
+    lx: IMPACT_OFF_LX * s,
+    lz: IMPACT_OFF_LZ * s,
+    y:  (parts ? parts.baseY : 1.79) + IMPACT_OFF_DY * s,
+    bodyY: IMPACT_BODY_Y,
+  };
+}
+
+// World position of the racket sweet-spot AT THE MOMENT OF CONTACT, given
+// the player's pelvis and facing. Used by the AI for both "where to run"
+// and "is the ball reachable yet" checks so they stay consistent.
+function computeRacketPos(P, parts) {
+  const o = impactRacketOffset(parts);
+  const ang = P.facing + o.bodyY;
+  const c = Math.cos(ang), si = Math.sin(ang);
   return new THREE.Vector3(
-    P.pos.x + fwdX * 0.42 + rgtX * 0.52,
-    1.05,
-    P.pos.z + fwdZ * 0.42 + rgtZ * 0.52
+    P.pos.x + o.lx * c + o.lz * si,
+    o.y,
+    P.pos.z - o.lx * si + o.lz * c
   );
 }
 
@@ -1790,7 +1902,8 @@ function resolveSwing(P, t, name) {
       scene.updateMatrixWorld(true);
       parts.racket.userData.sweet.getWorldPosition(_racketHit);
     } else {
-      const est = computeRacketPos(P);
+      const fallbackParts = (name === 'A') ? playerA : playerB;
+      const est = computeRacketPos(P, fallbackParts);
       _racketHit.set(est.x, est.y, est.z);
     }
     const dxz = Math.hypot(ball.pos.x - _racketHit.x, ball.pos.z - _racketHit.z);
@@ -1808,8 +1921,6 @@ function resolveSwing(P, t, name) {
       ball.spinRate = (P.swingShot === 'topspin') ? 28
                     : (P.swingShot === 'slice')   ? -22
                     : 14;
-      tennisGame.lastShotName = P.swingShot.toUpperCase();
-      updateScoreHUD();
     }
     P.contactDone = true;
   }
@@ -1820,28 +1931,10 @@ function resolveSwing(P, t, name) {
   }
 }
 
-function endRally(t, winner, reason) {
-  // Award the point. If it closes a game, also award the game; check for set win.
-  const wKey = (winner === 'A') ? 'pointsA' : 'pointsB';
-  const lKey = (winner === 'A') ? 'pointsB' : 'pointsA';
-  tennisGame[wKey]++;
-  // Game closes when winner ≥ 4 AND leads by ≥ 2 (handles deuce/advantage).
-  if (tennisGame[wKey] >= 4 && (tennisGame[wKey] - tennisGame[lKey]) >= 2) {
-    if (winner === 'A') tennisGame.gamesA++; else tennisGame.gamesB++;
-    tennisGame.pointsA = 0;
-    tennisGame.pointsB = 0;
-    // Server alternates each game (per real tennis), independent of who scored.
-    tennisGame.serveBy = (tennisGame.gamesA + tennisGame.gamesB) % 2 === 0 ? 'A' : 'B';
-    if (tennisGame.gamesA >= SET_TARGET || tennisGame.gamesB >= SET_TARGET) {
-      tennisGame.matchOver = true;
-      tennisGame.matchWinner = (tennisGame.gamesA > tennisGame.gamesB) ? 'A' : 'B';
-    }
-  } else {
-    // Within a game, server stays the server.
-    tennisGame.serveBy = tennisGame.serveBy;
-  }
+function endRally(t) {
+  // Alternate server each rally and reset for the next one.
+  tennisGame.serveBy = (tennisGame.serveBy === 'A') ? 'B' : 'A';
   tennisGame.rallyEndsAt = t + 1.6;
-  tennisGame.lastShotEnd = reason;
   ball.alive = false;
   ball.serving = false;
   ball.vel.set(0, 0, 0);
@@ -1851,7 +1944,6 @@ function endRally(t, winner, reason) {
   tennisGame.B.serveT0 = -1; tennisGame.B.serveStruck = false;
   tennisGame.A.swingT0 = -1;
   tennisGame.B.swingT0 = -1;
-  updateScoreHUD();
 }
 
 // ─── SERVE ANIMATION TIMING ─────────────────────────────────
@@ -1866,7 +1958,11 @@ function endRally(t, winner, reason) {
 //   - Peak external rotation ~0.09s before contact.
 // Stance→contact ≈ 1.0s, follow-through adds ~0.55s.
 const SERVE_TOSS_RELEASE = 0.25;
-const SERVE_TROPHY_END   = 0.65;
+const SERVE_TROPHY_END   = 0.62;
+// Racket low / "back scratch" — peak shoulder external rotation, racket head
+// pointing down-back behind the player. Per Kovacs/Ellenbecker, peak external
+// rotation occurs ~0.090s before contact.
+const SERVE_RACKET_LOW   = 0.88;
 const SERVE_STRIKE       = 1.00;
 const SERVE_END          = 1.55;
 // Toss velocity is computed per-serve in serveTick from the actual release
@@ -1907,9 +2003,6 @@ function serveRally(t) {
   ballMesh.visible = true;
   ballShadow.visible = true;
   tennisGame.rallyEndsAt = -1;
-  tennisGame.lastShotName = 'SERVE';
-  tennisGame.lastShotEnd = '';
-  updateScoreHUD();
 }
 
 // Drives the ball during the serve animation. Called only while ball.serving.
@@ -1971,18 +2064,6 @@ function serveTick(t) {
 
 // ─── MAIN PER-FRAME RALLY UPDATE ───────────────────────────
 function tennisTick(t, dt) {
-  // Match concluded: stop serving, just leave both players standing in ready
-  // pose so the final score on the HUD stays visible. Re-entering tennis mode
-  // (or the TENNIS button) resets via tennisEnter.
-  if (tennisGame.matchOver) {
-    tennisGame.A.targetX = 0; tennisGame.A.targetZ =  3.7;
-    tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
-    movePlayer(tennisGame.A, dt);
-    movePlayer(tennisGame.B, dt);
-    applyTennisPose(tennisGame.A, playerA, t);
-    if (playerB) applyTennisPose(tennisGame.B, playerB, t);
-    return;
-  }
   // Between-rally pause: players walk back to baseline center
   if (tennisGame.rallyEndsAt > 0 && t < tennisGame.rallyEndsAt) {
     tennisGame.A.targetX = 0; tennisGame.A.targetZ =  3.7;
@@ -2030,7 +2111,7 @@ function tennisTick(t, dt) {
 
   // Net collision (thin box at z=0, height 0..NET_H, width within posts)
   if (Math.abs(ball.pos.z) < 0.06 && ball.pos.y < COURT.NET_H && Math.abs(ball.pos.x) < COURT.NET_HALFW) {
-    endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'NET');
+    endRally(t);
     return;
   }
 
@@ -2048,19 +2129,19 @@ function tennisTick(t, dt) {
       const inLat = Math.abs(ball.pos.x) <= COURT.HALF_W + 0.04;
       const inDeep = Math.abs(ball.pos.z) <= COURT.HALF_L + 0.04;
       if (!inOppHalf || !inLat || !inDeep) {
-        endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'OUT');
+        endRally(t);
         return;
       }
     } else if (ball.bounces >= 2) {
-      // Second bounce → receiver missed → hitter scores
-      endRally(t, ball.hitter, 'WIN');
+      // Second bounce → receiver missed → rally ends.
+      endRally(t);
       return;
     }
   }
 
   // Ball completely off court (sailed past back fence)
   if (Math.abs(ball.pos.z) > COURT.HALF_L + 4 || Math.abs(ball.pos.x) > COURT.HALF_W + 4) {
-    endRally(t, ball.hitter === 'A' ? 'B' : 'A', 'OUT');
+    endRally(t);
     return;
   }
 
@@ -2070,11 +2151,23 @@ function tennisTick(t, dt) {
   const R = tennisGame[recvName];
   const O = tennisGame[otherName];
 
+  // Receiver position planning: subtract the impact-pose racket offset from
+  // the predicted intercept so the ball arrives AT THE RACKET HEAD, not at
+  // the player's pelvis. The racket extends ~1.3m forward and ~1.3m to the
+  // dominant side at the contact frame — a player who runs onto the ball
+  // would actually swing past it.
+  const recvParts = (recvName === 'A') ? playerA : playerB;
   const intercept = predictIntercept(R.side);
-  R.targetX = _clamp(intercept.x, -COURT.HALF_W * 1.05, COURT.HALF_W * 1.05);
+  const FACE = R.side > 0 ? Math.PI : 0;
+  const _o = impactRacketOffset(recvParts);
+  const _ang = FACE + _o.bodyY;
+  const _c = Math.cos(_ang), _s = Math.sin(_ang);
+  const _offX = _o.lx * _c + _o.lz * _s;
+  const _offZ = -_o.lx * _s + _o.lz * _c;
+  R.targetX = _clamp(intercept.x - _offX, -COURT.HALF_W * 1.10, COURT.HALF_W * 1.10);
   R.targetZ = R.side > 0
-    ? _clamp(intercept.z,  0.6,  COURT.HALF_L + 0.6)
-    : _clamp(intercept.z, -COURT.HALF_L - 0.6, -0.6);
+    ? _clamp(intercept.z - _offZ,  0.6,  COURT.HALF_L + 0.6)
+    : _clamp(intercept.z - _offZ, -COURT.HALF_L - 0.6, -0.6);
 
   O.targetX = ball.pos.x * 0.25;       // shade slightly toward where ball is
   O.targetZ = O.side * 3.5;
@@ -2083,14 +2176,20 @@ function tennisTick(t, dt) {
   movePlayer(tennisGame.B, dt);
 
   // ── Swing trigger: predict ball position SWING_LOOKAHEAD seconds ahead ──
+  // Both checks (reach AND height) reference the actual impact-pose racket
+  // position, so the trigger only fires when the predicted ball will be
+  // close to where the racket head WILL BE on the contact frame. This keeps
+  // the snap-to-racket teleport in resolveSwing visually small.
   if (R.swingT0 < 0) {
     const fut = predictBall(SWING_LOOKAHEAD, ball.pos, ball.vel, ball.bounces);
-    const racket = computeRacketPos(R);
+    // Use FACE (the canonical facing toward the net), not R.facing — by the
+    // moment of impact the player will have rotated back to FACE, so the
+    // assumed-impact racket position is what we actually want to test.
+    const racket = computeRacketPos({ pos: R.pos, facing: FACE }, recvParts);
     const dxz = Math.hypot(fut.p.x - racket.x, fut.p.z - racket.z);
-    const yOK = fut.p.y > COURT.STRIKE_Y_MIN && fut.p.y < COURT.STRIKE_Y_MAX;
-    // Ball should still be on receiver's side (or near it) at impact
+    const dy  = Math.abs(fut.p.y - racket.y);
     const onSide = (fut.p.z * R.side) > -0.3;
-    if (dxz < COURT.RACKET_REACH && yOK && onSide) {
+    if (dxz < COURT.RACKET_REACH && dy < 0.85 && onSide) {
       triggerSwing(R, t, recvName);
     }
   }
@@ -2113,15 +2212,27 @@ function tennisTick(t, dt) {
   ballShadow.material.opacity = 0.55 * sh;
 }
 
-// ─── POSE: READY (light bounce, racket up at right) ─────────
+// ─── POSE: READY (athletic stance, BOTH hands on racket) ─────
+// Real ready position: knees flexed, weight on balls of feet, non-dominant
+// hand cradles the racket throat so it can launch a unit turn into either
+// forehand or backhand. Bringing the left arm across the chest (lSh.z negative,
+// elbow strongly flexed) places the left hand roughly where the right hand
+// holds the grip — visually the player is "framing" the racket in front.
 function poseTennisReady(P, parts, t) {
   const bounce = Math.sin(t * 5.5) * 0.5 + 0.5;
-  const knee = 0.30 + bounce * 0.05;
+  const knee = 0.36 + bounce * 0.05;
 
-  parts.rSh.rotation.set(-0.18, 0, 0.55);
-  parts.rElb.rotation.set(-0.65, 0, 0);
-  parts.lSh.rotation.set(-0.50, 0, 0.30);
-  parts.lElb.rotation.set(-0.75, 0, 0);
+  // Right (racket) arm: lifted in front, slightly INWARD toward midline so
+  // the racket carries forward of the chest (not flapping out to the right).
+  // sZ negative on the right shoulder pulls the arm in toward body center.
+  parts.rSh.rotation.set(-0.55, 0, -0.40);
+  parts.rElb.rotation.set(-1.30, 0, 0);
+
+  // Left (support) arm: mirror of the right (sZ positive ADDUCTS the left
+  // arm INWARD toward the racket throat), so both hands converge near the
+  // racket grip in the player's center-front.
+  parts.lSh.rotation.set(-0.55, 0, 0.40);
+  parts.lElb.rotation.set(-1.30, 0, 0);
 
   parts.rHip.rotation.set(-knee * 0.55, 0, 0);
   parts.lHip.rotation.set(-knee * 0.55, 0, 0);
@@ -2130,11 +2241,16 @@ function poseTennisReady(P, parts, t) {
   parts.rAnk.rotation.x = -knee * 0.4;
   parts.lAnk.rotation.x = -knee * 0.4;
 
-  parts.spine.rotation.set(-0.06, 0, 0);
-  parts.neckGrp.rotation.set(0.04, 0, 0);
+  parts.spine.rotation.set(-0.10, 0, 0);
+  parts.neckGrp.rotation.set(0.05, 0, 0);
 }
 
 // ─── POSE: RUN (legs/arms pump scaled by speed) ─────────────
+// Real players carry the racket out in FRONT while chasing — both arms stay
+// raised, racket pointing forward. Arm-swing amplitude is reduced (you need
+// to be ready to plant and swing the moment you arrive). We lock both arms
+// into a forward racket-carry and let only a tiny opposing pump leak through
+// for natural locomotion.
 function poseTennisRun(P, parts, t) {
   const ph = P.runPhase;
   const r = Math.sin(ph), l = -r;
@@ -2145,69 +2261,128 @@ function poseTennisRun(P, parts, t) {
   parts.rKn.rotation.x = Math.max(0, -Math.cos(ph)) * 1.20 * amp;
   parts.lKn.rotation.x = Math.max(0,  Math.cos(ph)) * 1.20 * amp;
 
-  // While chasing, racket arm stays slightly raised in ready position
-  parts.rSh.rotation.set(-r * 0.22 * amp - 0.1, 0, 0.45);
-  parts.lSh.rotation.set(-l * 0.30 * amp,        0, 0.18);
-  parts.rElb.rotation.x = -0.85;
-  parts.lElb.rotation.x = -0.55;
+  // Both arms held in front (racket carry); small opposing pump for life.
+  // Mirror sZ signs so hands converge toward the racket in body center.
+  parts.rSh.rotation.set(-0.55 - r * 0.10 * amp, 0, -0.40);
+  parts.lSh.rotation.set(-0.55 - l * 0.10 * amp, 0,  0.40);
+  parts.rElb.rotation.x = -1.25;
+  parts.lElb.rotation.x = -1.25;
 
-  parts.spine.rotation.set(-0.06, -r * 0.06 * amp, 0);
+  parts.spine.rotation.set(-0.10, -r * 0.08 * amp, 0);
   parts.neckGrp.rotation.set(0.06, 0, 0);
   parts.rAnk.rotation.x = Math.max(0, r) * 0.20 * amp;
   parts.lAnk.rotation.x = Math.max(0, l) * 0.20 * amp;
 }
 
 // ─── POSE: SWING (state-driven, biomechanical kinetic chain) ─
-const _SW_T1 = 0.10, _SW_T3 = SWING_CONTACT + 0.20, _SW_T4 = SWING_DURATION;
+// Six phases per Brian Gordon / OnCourtAI / Feel Tennis kinetic-chain
+// research: WINDUP → UNIT TURN (peak coil at SWING_CONTACT) → RACKET DROP
+// (loop bottom, just before contact) → IMPACT/EXTENSION → WINDSHIELD WIPER
+// FOLLOW-THROUGH → recover. The "drop" inserts the low-loop point that
+// gives modern forehands their topspin signature: racket head dips below
+// the contact plane before whipping up through the ball. The follow-through
+// sweeps the arm UP-AND-ACROSS to the opposite shoulder (sZ near 2.4 with
+// elbow strongly flexed = forearm wrapping across the body) — the visual
+// every modern topspin forehand finishes with.
+const _SW_T1 = 0.10;                       // end of windup
+const _SW_DROP = SWING_CONTACT + 0.08;     // racket-low / loop bottom (~0.50)
+const _SW_PEAK_FT = SWING_IMPACT + 0.18;   // peak windshield wiper (~0.78)
+const _SW_T4 = SWING_DURATION;             // back to ready
 function poseTennisSwing(P, parts, t) {
   const lt = t - P.swingT0;
   let bodyY, sZ, sX, eX, lsZ, lsX, leX, knee, hipShift;
 
   if (lt < _SW_T1) {
+    // WINDUP: split-step recovery. Body starts coiling, racket released from
+    // the support hand, both arms still slightly forward. Start from ready
+    // values (sZ=-0.40 inward) and ramp the racket arm OUTWARD (positive sZ)
+    // as the body unit-turns away from the net.
     const k = lt / _SW_T1;
-    bodyY = lerp(0.05, 0.20, k);
-    sZ = lerp(0.55, 0.70, k);
-    sX = lerp(-0.15, -0.20, k);
-    eX = lerp(-0.65, -0.30, k);
-    lsZ = 0.20; lsX = -0.50; leX = -0.55;
-    knee = 0.32; hipShift = 0;
+    bodyY = lerp(0.05, 0.30, k);
+    sZ = lerp(-0.40, 0.85, k);
+    sX = lerp(-0.55, -0.30, k);
+    eX = lerp(-1.30, -0.40, k);
+    lsZ = lerp(0.40, -0.30, k);              // support arm starts to release
+    lsX = lerp(-0.55, -0.45, k);
+    leX = lerp(-1.30, -0.95, k);
+    knee = 0.36; hipShift = 0;
   } else if (lt < SWING_CONTACT) {
-    // Backswing — body coils, racket up-back-right
+    // UNIT TURN / BACKSWING: shoulders coil ~60°+ away from net, weight loads
+    // on the back leg, racket reaches its high "L"-shape backswing (upper arm
+    // out, elbow flexed, racket head pointing up and back).
     const k = ss((lt - _SW_T1) / (SWING_CONTACT - _SW_T1));
-    bodyY = lerp(0.20, 0.62, k);
-    sZ = lerp(0.70, 1.30, k);
-    sX = lerp(-0.20, 0.55, k);
-    eX = lerp(-0.30, 1.80, k);
-    lsZ = lerp(0.20, 0.10, k);
-    lsX = lerp(-0.50, -0.95, k);
-    leX = lerp(-0.55, -0.10, k);
-    knee = lerp(0.32, 0.44, k);
-    hipShift = lerp(0, 0.06, k);
-  } else if (lt < _SW_T3) {
-    // Forward swing through impact (linear, fast)
-    const k = (lt - SWING_CONTACT) / (_SW_T3 - SWING_CONTACT);
-    bodyY = lerp(0.62, -0.28, k);
-    sZ = lerp(1.30, 0.55, k);
-    sX = lerp(0.55, -0.55, k);
-    eX = lerp(1.80, -0.05, k);
-    lsZ = lerp(0.10, 0.30, k);
-    lsX = lerp(-0.95, -0.30, k);
-    leX = lerp(-0.10, -0.85, k);
-    knee = lerp(0.44, 0.20, k);
-    hipShift = lerp(0.06, -0.05, k);
+    bodyY = lerp(0.30, 1.00, k);            // strong coil — back nearly to net
+    sZ = lerp(0.85, 1.45, k);               // upper arm rises out to right
+    sX = lerp(-0.30, 0.20, k);              // shoulder pulls slightly back
+    eX = lerp(-0.40, 1.55, k);              // elbow flex into "L" — racket up-back
+    lsZ = lerp(-0.30, -0.10, k);            // support arm extends toward net
+    lsX = lerp(-0.45, -0.55, k);            // and points slightly forward (sighting)
+    leX = lerp(-0.95, -0.40, k);
+    knee = lerp(0.36, 0.50, k);             // load the back leg
+    hipShift = lerp(0, 0.05, k);
+  } else if (lt < _SW_DROP) {
+    // RACKET DROP / LOOP: hips begin to fire, body uncoils, but the racket
+    // head DROPS as the elbow leads — classic "lag" that creates topspin.
+    // eX coming sharply out of "up-back" past neutral pulls the racket head
+    // DOWN behind/below the contact line.
+    const k = (lt - SWING_CONTACT) / (_SW_DROP - SWING_CONTACT);
+    bodyY = lerp(1.00, 0.55, k);            // hips/shoulders begin uncoil
+    sZ = lerp(1.45, 1.05, k);               // arm starts dropping from up-back
+    sX = lerp(0.20, -0.10, k);
+    eX = lerp(1.55, 0.10, k);               // racket head plummets through neutral
+    lsZ = lerp(-0.10, -0.20, k);
+    lsX = lerp(-0.55, -0.50, k);
+    leX = lerp(-0.40, -0.75, k);
+    knee = lerp(0.50, 0.36, k);             // back leg drives off the ground
+    hipShift = lerp(0.05, 0.00, k);
+  } else if (lt < SWING_IMPACT) {
+    // FORWARD SWING THROUGH CONTACT: arm extends, racket whips low-to-high,
+    // body fully uncoils, weight transfers to front leg. At impact (k=1)
+    // the arm is roughly out to the right, slightly forward, nearly extended
+    // — racket face perpendicular to swing path, meeting ball waist-high.
+    const k = (lt - _SW_DROP) / (SWING_IMPACT - _SW_DROP);
+    bodyY = lerp(0.55, -0.20, k);
+    sZ = lerp(1.05, 0.65, k);
+    sX = lerp(-0.10, -0.45, k);
+    eX = lerp(0.10, -0.20, k);              // forearm extends through contact
+    lsZ = lerp(-0.20, -0.45, k);
+    lsX = lerp(-0.50, -0.40, k);
+    leX = lerp(-0.75, -1.05, k);
+    knee = lerp(0.36, 0.22, k);
+    hipShift = lerp(0.00, -0.04, k);
+  } else if (lt < _SW_PEAK_FT) {
+    // WINDSHIELD WIPER: arm continues UP and ACROSS the body. sZ rising past
+    // π/2 toward 2.4 sweeps the arm overhead and to the LEFT side (across
+    // the chest); strong elbow flexion (eX ≈ -2.0) wraps the forearm so the
+    // racket finishes near the opposite shoulder/ear. sX positive tilts the
+    // upper arm forward of the torso, completing the wrap.
+    const k = ss((lt - SWING_IMPACT) / (_SW_PEAK_FT - SWING_IMPACT));
+    bodyY = lerp(-0.20, -0.55, k);          // body keeps rotating toward net
+    sZ = lerp(0.65, 2.40, k);               // arm sweeps up-and-across to left
+    sX = lerp(-0.45, 0.45, k);
+    eX = lerp(-0.20, -2.00, k);             // forearm wraps across body
+    lsZ = lerp(-0.45, -0.55, k);
+    lsX = lerp(-0.40, -0.35, k);
+    leX = lerp(-1.05, -1.55, k);            // support arm tucks tight to chest
+    knee = lerp(0.22, 0.30, k);
+    hipShift = lerp(-0.04, -0.02, k);
   } else {
-    // Follow-through → recover
-    const k = ss((lt - _SW_T3) / (_SW_T4 - _SW_T3));
-    bodyY = lerp(-0.28, 0.05, k);
-    sZ = lerp(0.55, 0.55, k);
-    sX = lerp(-0.55, -0.18, k);
-    eX = lerp(-0.05, -0.55, k);
-    lsZ = 0.30; lsX = lerp(-0.30, -0.50, k); leX = lerp(-0.85, -0.55, k);
-    knee = lerp(0.20, 0.30, k);
-    hipShift = lerp(-0.05, 0, k);
+    // RECOVER: smoothly return to the BOTH-hands-on-racket ready stance.
+    // End values must match poseTennisReady exactly so there's no pop on
+    // the frame after lt > SWING_DURATION.
+    const k = ss((lt - _SW_PEAK_FT) / (_SW_T4 - _SW_PEAK_FT));
+    bodyY = lerp(-0.55, 0.00, k);
+    sZ = lerp(2.40, -0.40, k);
+    sX = lerp(0.45, -0.55, k);
+    eX = lerp(-2.00, -1.30, k);
+    lsZ = lerp(-0.55,  0.40, k);
+    lsX = lerp(-0.35, -0.55, k);
+    leX = lerp(-1.55, -1.30, k);
+    knee = lerp(0.30, 0.36, k);
+    hipShift = lerp(-0.02, 0.00, k);
   }
 
-  parts.spine.rotation.set(-0.10, bodyY * 0.45, -bodyY * 0.06);
+  parts.spine.rotation.set(-0.10, bodyY * 0.45, -bodyY * 0.05);
   parts.rSh.rotation.set(sX, 0, sZ);
   parts.rElb.rotation.set(eX, 0, 0);
   parts.lSh.rotation.set(lsX, 0, lsZ);
@@ -2218,8 +2393,8 @@ function poseTennisSwing(P, parts, t) {
   parts.lKn.rotation.x = knee;
   parts.rAnk.rotation.x = -knee * 0.4;
   parts.lAnk.rotation.x = -knee * 0.4;
-  parts.neckGrp.rotation.set(0.04, -bodyY * 0.5, 0);
-  // Body coil contributes a small y-rotation on top of the player's facing
+  parts.neckGrp.rotation.set(0.05, -bodyY * 0.4, 0);
+  // Body coil contributes a y-rotation on top of the player's facing
   parts.root.userData.swingBodyY = bodyY;
 }
 
@@ -2244,66 +2419,95 @@ function poseTennisServe(P, parts, t) {
   const STRIKE = SERVE_STRIKE;
   const END = SERVE_END;
   let bodyY, bodyZ, sZ, sX, eX, lsZ, lsX, leX, knee, hipShift, headTilt;
+  // legDrive lifts the player off the ground at strike (kick-up), per the
+  // Kovacs 8-stage model: lower-body uncoil + double-leg extension launch.
+  let legDrive = 0;
 
   if (lt < REL) {
-    // WINDUP: server coils away from net, both arms begin to lift in unison.
-    // Toss arm rises along the body's left/front to deliver the ball overhead.
+    // WINDUP / TOSS: body coils, knees load, TOSS arm rises straight up to
+    // deliver the ball overhead. The racket arm stays in FRONT of the body
+    // (sZ near ready, sX strongly forward-tilted) — we deliberately do NOT
+    // sweep it out to the side during windup, because Euler interpolation
+    // would make it dip down-and-out instead of arcing cleanly. The big
+    // sweep back to trophy happens during the TROPHY phase.
     const k = ss(lt / REL);
-    bodyY = lerp(0, 0.45, k);          // shoulders coil away from net
-    bodyZ = lerp(0, -0.12, k);         // trunk tilts toward racket side
-    sZ = lerp(0.55, 1.30, k);          // upper arm rising to ~75° abducted
-    sX = lerp(-0.18, -0.20, k);
-    eX = lerp(-0.65, 0.40, k);         // forearm flips toward "up-back" sign
-    lsZ = lerp(0.30, -2.20, k);        // toss arm rises past horizontal
-    lsX = lerp(-0.50, 0.10, k);
-    leX = lerp(-0.75, -0.20, k);
-    knee = lerp(0.30, 0.45, k);
-    hipShift = lerp(0, 0.04, k);
-    headTilt = lerp(0.04, -0.22, k);   // eyes track the rising toss
+    bodyY = lerp(0, 0.55, k);              // shoulders coil — back to net
+    bodyZ = lerp(0, -0.14, k);             // trunk tilts toward racket side
+    sZ = lerp(-0.40, -0.20, k);            // racket arm stays in front, slight relax
+    sX = lerp(-0.55, -0.55, k);            // hold strong forward tilt
+    eX = lerp(-1.30, -0.70, k);            // forearm starts extending forward
+    lsZ = lerp( 0.40, -2.20, k);           // toss arm rises past horizontal toward overhead
+    lsX = lerp(-0.55, 0.10, k);
+    leX = lerp(-1.30, -0.20, k);
+    knee = lerp(0.36, 0.55, k);
+    hipShift = lerp(0, 0.05, k);
+    headTilt = lerp(0.05, -0.22, k);       // eyes track the rising toss
   } else if (lt < TROPHY_END) {
-    // TROPHY: shoulder ≈ 90-100° abducted, elbow ≈ 90° flex, racket points UP
-    // behind/over the head; toss arm fully extended STRAIGHT UP at the ball.
+    // TROPHY (Kovacs cocking stage): shoulder ≈ 100° abducted, elbow ≈ 104°
+    // flexed (per Kovacs 1.81 rad), racket pointing up-and-back behind the
+    // head; toss arm fully extended STRAIGHT UP at the ball; deepest knee
+    // load. The racket arm sweeps from in-FRONT (windup end) to UP-AND-BACK
+    // here — sZ goes -0.20 → 1.80, a ~115° arc. Because the body is already
+    // coiled (bodyY=0.55+ at start of trophy), the intermediate "out-to-side"
+    // moments are in the body's lateral direction, which is along the
+    // baseline rather than across the court — looks like a unit-turn lift.
     const k = ss((lt - REL) / (TROPHY_END - REL));
-    bodyY = lerp(0.45, 0.55, k);       // peak shoulder coil
-    bodyZ = lerp(-0.12, -0.22, k);     // peak lateral tilt back
-    sZ = lerp(1.30, 1.75, k);          // ~100° abducted
-    sX = lerp(-0.20, -0.30, k);
-    eX = lerp(0.40, 1.85, k);          // ~90° flex with forearm pointing UP
-    lsZ = lerp(-2.20, -3.05, k);       // ≈π → arm straight overhead
-    lsX = lerp(0.10, 0.18, k);
-    leX = lerp(-0.20, -0.05, k);       // toss arm fully extended
-    knee = lerp(0.45, 0.62, k);        // deepest knee bend (loading)
-    hipShift = lerp(0.04, 0.06, k);
-    headTilt = -0.30;                  // looking straight up
+    bodyY = lerp(0.55, 0.85, k);           // peak shoulder coil — back to net
+    bodyZ = lerp(-0.14, -0.28, k);         // peak lateral tilt back
+    sZ = lerp(-0.20, 1.80, k);             // big sweep: front → up-and-out (~103°)
+    sX = lerp(-0.55, -0.35, k);            // shoulder pulls back as it lifts
+    eX = lerp(-0.70, 1.80, k);             // forearm flexes from forward to up-back
+    lsZ = lerp(-2.20, -3.05, k);           // toss arm straight up (≈π)
+    lsX = lerp(0.10, 0.20, k);
+    leX = lerp(-0.20, -0.05, k);           // toss arm fully extended
+    knee = lerp(0.55, 0.85, k);            // deepest load
+    hipShift = lerp(0.05, 0.07, k);
+    headTilt = -0.32;                      // looking straight up
   } else if (lt < STRIKE) {
-    // STRIKE: legs explode upward, hips uncoil into shoulder-over-shoulder,
-    // racket arm whips into full overhead extension to meet the falling ball.
+    // STRIKE: explosive uncoil. Trophy → contact directly. The racket
+    // travels up-and-over from "up-back" (eX=1.80) to "extended overhead"
+    // (eX=-0.10) while the arm rises sZ=1.80→3.05. The intermediate path
+    // keeps the racket up-and-back the whole time (it never sweeps in
+    // front of the body), since both sZ and eX are in their "up" half of
+    // rotation space. legDrive launches the body off the ground at impact.
+    // (No explicit racket-drop phase: in our rig, going eX past π/2 via
+    // a separate phase makes the racket pass through "forward" mid-strike
+    // because of Euler interpolation — better to fire trophy → strike in
+    // one fast linear sweep.)
     const k = (lt - TROPHY_END) / (STRIKE - TROPHY_END);
-    bodyY = lerp(0.55, -0.15, k);      // uncoil through square
-    bodyZ = lerp(-0.22, 0.05, k);      // lateral tilt reverses (lean forward)
-    sZ = lerp(1.75, 3.05, k);          // arm whips overhead (≈π)
-    sX = lerp(-0.30, 0.08, k);
-    eX = lerp(1.85, -0.10, k);         // elbow snaps through to full extension
-    lsZ = lerp(-3.05, -0.55, k);       // toss arm tucks across chest
-    lsX = lerp(0.18, -0.40, k);
+    bodyY = lerp(0.85, -0.20, k);          // big uncoil, shoulders rotate to face net
+    bodyZ = lerp(-0.28, 0.06, k);          // lateral tilt reverses (lean forward)
+    sZ = lerp(1.80, 3.05, k);              // arm whips overhead (~π)
+    sX = lerp(-0.35, 0.05, k);
+    eX = lerp(1.80, -0.10, k);             // elbow snaps from 104° flex to ~20°
+    lsZ = lerp(-3.05, -0.55, k);           // toss arm tucks across chest
+    lsX = lerp(0.20, -0.40, k);
     leX = lerp(-0.05, -1.45, k);
-    knee = lerp(0.62, 0.05, k);        // legs drive up at impact
-    hipShift = lerp(0.06, -0.05, k);
-    headTilt = lerp(-0.30, -0.10, k);
+    knee = lerp(0.85, 0.05, k);            // legs explode straight
+    hipShift = lerp(0.07, -0.05, k);
+    headTilt = lerp(-0.32, -0.10, k);
+    legDrive = lerp(0, 0.22, k);           // peak vertical lift at contact
   } else {
-    // FOLLOW: racket sweeps down across body to the opposite hip.
+    // FOLLOW: racket sweeps down across body toward the opposite (left) hip.
+    // To AVOID the racket sweeping out to the right side mid-follow (which is
+    // what happens if sZ goes π → 0 directly — passes through π/2 = horizontal-
+    // out-to-right), we drive sX strongly negative (forward tilt) and let eX
+    // collapse to deeply flexed forward — so the upper arm comes DOWN-AND-
+    // FORWARD across the chest, with the forearm wrapping inward to the
+    // opposite hip. End values match poseTennisReady to avoid a pop.
     const k = ss((lt - STRIKE) / (END - STRIKE));
-    bodyY = lerp(-0.15, 0, k);
-    bodyZ = lerp(0.05, 0, k);
-    sZ = lerp(3.05, 0.40, k);          // arm sweeps down across the body
-    sX = lerp(0.08, 0.65, k);
-    eX = lerp(-0.10, -1.05, k);        // forearm flexes forward at finish
-    lsZ = lerp(-0.55, 0.30, k);
-    lsX = lerp(-0.40, -0.50, k);
-    leX = lerp(-1.45, -0.75, k);
-    knee = lerp(0.05, 0.30, k);
+    bodyY = lerp(-0.20, 0, k);
+    bodyZ = lerp(0.06, 0, k);
+    sZ = lerp(3.05, -0.40, k);             // arm comes down toward ready
+    sX = lerp(0.05, -0.55, k);             // strong forward tilt drives arm in front, not out
+    eX = lerp(-0.10, -1.55, k);            // forearm flexes forward across body to finish
+    lsZ = lerp(-0.55,  0.40, k);
+    lsX = lerp(-0.40, -0.55, k);
+    leX = lerp(-1.45, -1.30, k);
+    knee = lerp(0.05, 0.36, k);            // landing absorbs
     hipShift = lerp(-0.05, 0, k);
-    headTilt = lerp(-0.10, 0.04, k);
+    headTilt = lerp(-0.10, 0.05, k);
+    legDrive = lerp(0.22, 0.00, k);        // descent back to ground
   }
 
   parts.spine.rotation.set(-0.10, bodyY * 0.45, bodyZ);
@@ -2318,6 +2522,9 @@ function poseTennisServe(P, parts, t) {
   parts.rAnk.rotation.x = -knee * 0.4;
   parts.lAnk.rotation.x = -knee * 0.4;
   parts.neckGrp.rotation.set(headTilt, -bodyY * 0.45, 0);
+  // Lift the entire root for the leg-drive jump (real servers leave the
+  // ground at contact). Layered on top of the floor-collision base height.
+  parts.root.position.y = parts.baseY + legDrive;
   parts.root.userData.swingBodyY = bodyY;
 }
 
@@ -2352,43 +2559,9 @@ function applyTennisPose(P, parts, t) {
   parts.root.rotation.y = P.facing + (parts.root.userData.swingBodyY || 0);
 }
 
-// ─── SCORE HUD ──────────────────────────────────────────────
-const scoreEl = document.getElementById('score');
-// Real tennis: 0/15/30/40, then game point. After 40-40 it's deuce; the
-// player ahead by 1 has the advantage (Ad). +2 closes the game.
-function pointLabel(p, opp) {
-  const ladder = ['0', '15', '30', '40'];
-  // Deuce range only kicks in once both sides have reached 40 — before that
-  // the receiver's "40" still reads as 40, not Deuce.
-  if (p >= 3 && opp >= 3) {
-    if (p === opp)     return 'Deuce';
-    if (p === opp + 1) return 'Ad';
-    return '—';
-  }
-  return ladder[Math.min(p, 3)];
-}
-function updateScoreHUD() {
-  if (!scoreEl) return;
-  const a = pointLabel(tennisGame.pointsA, tennisGame.pointsB);
-  const b = pointLabel(tennisGame.pointsB, tennisGame.pointsA);
-  const games = `${tennisGame.gamesA}-${tennisGame.gamesB}`;
-  let tag;
-  if (tennisGame.matchOver) {
-    tag = `MATCH · ${tennisGame.matchWinner} WINS`;
-  } else {
-    tag = tennisGame.lastShotEnd
-      ? tennisGame.lastShotEnd + ' · ' + tennisGame.lastShotName
-      : tennisGame.lastShotName || 'RALLY';
-  }
-  scoreEl.innerHTML =
-    `A ${a} — ${b} B<span class="shot">SET ${games} · ${tag}</span>`;
-}
-updateScoreHUD();
-
 // ─── ENTER / EXIT TENNIS MODE ───────────────────────────────
 function tennisEnter(t) {
   if (courtGroup) courtGroup.visible = true;
-  // Reset positions and scores fresh each entry
   tennisGame.A.pos.set(0, 0,  3.7); tennisGame.A.facing = Math.PI;
   tennisGame.A.targetX = 0; tennisGame.A.targetZ = 3.7;
   tennisGame.A.speed = 0; tennisGame.A.swingT0 = -1;
@@ -2397,19 +2570,12 @@ function tennisEnter(t) {
   tennisGame.B.targetX = 0; tennisGame.B.targetZ = -3.7;
   tennisGame.B.speed = 0; tennisGame.B.swingT0 = -1;
   tennisGame.B.serveT0 = -1; tennisGame.B.serveStruck = false;
-  tennisGame.pointsA = 0; tennisGame.pointsB = 0;
-  tennisGame.gamesA  = 0; tennisGame.gamesB  = 0;
-  tennisGame.matchOver = false;
-  tennisGame.matchWinner = null;
   tennisGame.serveBy = 'A';
   tennisGame.rallyEndsAt = t + 0.7;
-  tennisGame.lastShotName = '';
-  tennisGame.lastShotEnd = '';
   ball.alive = false;
   ball.serving = false;
   ballMesh.visible = false;
   ballShadow.visible = false;
-  updateScoreHUD();
 }
 function tennisExit() {
   if (courtGroup) courtGroup.visible = false;
@@ -2430,12 +2596,23 @@ function animBreak(t) {
   const CYCLE = 14;
   const cp = t % CYCLE;
 
+  // Use YXZ Euler order for all break phases: rotation.y is then applied
+  // FIRST (around vertical world Y axis), so it produces a clean spin even
+  // when the body is then tipped flat by rotation.x. With the default XYZ
+  // order, rot.y after rot.x rolls the body around its OWN long axis,
+  // which causes shoulders (0.5m from spine) to dip below the floor and
+  // forces the pin to bounce the body up.
+  if (root.rotation.order !== 'YXZ') root.rotation.order = 'YXZ';
+
+  _SKIP_LEG_CLAMP = false;
   if (cp < 2.5) {
     breakToprock(t, cp);
     applyGroundCollision();           // feet on floor
   } else if (cp < 6.0) {
     breakWindmill(t, cp - 2.5);
-    pinNodeToFloor(spine);            // upper back grazes floor
+    if (!_WIND_SKIP) _WIND_SKIP = new Set([rFoot, lFoot, rKn, lKn, rHnd, lHnd, rSh, lSh, rElb, lElb]);
+    pinNodeToFloor(spine, 0.04, 0.235, _WIND_SKIP);  // torso sits on its actual radius
+    _SKIP_LEG_CLAMP = true;           // legs sweep through torso volume legitimately
   } else if (cp < 9.5) {
     breakHeadspin(t, cp - 6.0);
     pinNodeToFloor(headPivot, 0.04, 0.27);  // crown of head on floor
@@ -2506,6 +2683,77 @@ function clampArmsThroughBody() {
   }
 }
 
+// ─── LEG PENETRATION CHECKS ─────────────────────────────────
+// Two failure modes for legs:
+//   1) Knee/foot inside the torso ellipse (extreme cross-step or freeze tuck)
+//   2) Knee/foot crossing the body's centerline through the OTHER leg
+// We re-use the spine-local frame so body tilts (freeze, windmill) are
+// handled correctly. The body ellipse is widened slightly here vs. the arm
+// check so the pelvis (radius 0.22 sphere) is also covered — legs swinging
+// up forward should never punch the hip socket of the opposite side.
+const E_LEG_RX = 0.27, E_LEG_RZ = 0.21;
+const TL_Y0 = -0.24, TL_Y1 = 1.05;   // include pelvis sphere
+
+function _inBody(worldPt) {
+  _lv.copy(worldPt).applyMatrix4(_spineInv);
+  if (_lv.y < TL_Y0 || _lv.y > TL_Y1) return false;
+  const ex = _lv.x / E_LEG_RX, ez = _lv.z / E_LEG_RZ;
+  return ex*ex + ez*ez < 1.0;
+}
+
+function _fixLeg(kn, ft, hipGrp, knGrp, outwardX) {
+  kn.getWorldPosition(_h3);
+  ft.getWorldPosition(_e3);
+  _m3.set((_h3.x+_e3.x)*.5, (_h3.y+_e3.y)*.5, (_h3.z+_e3.z)*.5);
+
+  if (_inBody(_h3) || _inBody(_m3) || _inBody(_e3)) {
+    // First straighten the knee (positive flex bends knee — pull toward 0)
+    if (knGrp.rotation.x > 0.05) {
+      knGrp.rotation.x = Math.max(0, knGrp.rotation.x - 0.35);
+    } else {
+      // Knee already straight → abduct the hip outward to clear torso
+      hipGrp.rotation.z += outwardX * 0.18;
+    }
+    return true;
+  }
+  return false;
+}
+
+// Prevent the right knee/foot from passing onto the left side of the body
+// (and vice versa). In spine-local frame: right leg world-space points
+// should have x >= 0 (or at most just past centerline by margin); same for
+// left side mirrored. When the line is crossed, push the hip back outward.
+const _kr = new THREE.Vector3(), _kl = new THREE.Vector3();
+const _fr = new THREE.Vector3(), _fl = new THREE.Vector3();
+
+function _kneesCrossed(rKnPt, lKnPt) {
+  // Knees crossing is anatomically impossible — feet crossing in the air is
+  // normal (Indian step, scissor kicks). So we only flag KNEE positions
+  // crossing past the centerline of the body. Margin is one knee-radius.
+  const margin = 0.12;
+  return (rKnPt.x < -margin) && (lKnPt.x > margin);
+}
+
+function clampLegsThroughBody() {
+  for (let i = 0; i < 5; i++) {
+    scene.updateMatrixWorld(true);
+    _spineInv.copy(spine.matrixWorld).invert();
+    // Step 1: legs vs torso
+    const rP = _fixLeg(rKn, rFoot, rHip, rKn, +1); // right: outward = +z (away from body)
+    const lP = _fixLeg(lKn, lFoot, lHip, lKn, -1);
+    // Step 2: knees crossing each other
+    rKn.getWorldPosition(_kr); _kr.applyMatrix4(_spineInv);
+    lKn.getWorldPosition(_kl); _kl.applyMatrix4(_spineInv);
+    let crossed = false;
+    if (_kneesCrossed(_kr, _kl)) {
+      rHip.rotation.z += 0.10;
+      lHip.rotation.z -= 0.10;
+      crossed = true;
+    }
+    if (!rP && !lP && !crossed) break;
+  }
+}
+
 
 // ─── GROUND COLLISION ───────────────────────────────────────
 // After pose is set, measure world-space Y of all extremities.
@@ -2542,7 +2790,11 @@ function applyGroundCollisionFor(P) {
 // pivot point that sits 0.27m above it. Each probe carries its own radius
 // matching the visible mesh extent so we don't lift the body just because
 // a pivot clears the floor while the actual mesh dips below.
-function pinNodeToFloor(node, floor = 0.04, nodeRadius = 0) {
+//
+// `skipProbes` (Set of nodes) lets callers exclude limbs that are SUPPOSED
+// to swing freely below the floor's level (e.g. windmill legs sweep through
+// the body's roll plane and shouldn't lift the whole body off the ground).
+function pinNodeToFloor(node, floor = 0.04, nodeRadius = 0, skipProbes = null) {
   scene.updateMatrixWorld(true);
   node.getWorldPosition(_wp);
   let rise = floor - (_wp.y - nodeRadius);
@@ -2553,11 +2805,25 @@ function pinNodeToFloor(node, floor = 0.04, nodeRadius = 0) {
   ];
   if (headPivot) probes.push([headPivot, 0.27]);
   for (const [n, r] of probes) {
+    if (skipProbes && skipProbes.has(n)) continue;
     n.getWorldPosition(_wp);
     if ((floor - (_wp.y - r)) > rise) rise = floor - (_wp.y - r);
   }
   root.position.y += rise;
 }
+
+// Windmill skip-set: feet/knees swing in a circle whose lower half passes
+// "through" the floor in body-local terms; the body's roll keeps the actual
+// mesh moving fast enough that the eye reads it as a clean spin rather than
+// clipping. Including those nodes in the floor probe would lift the entire
+// body 1m+ off the ground every time a leg points down.
+let _WIND_SKIP = null;
+
+// Set true while the body is rolling around its long axis (windmill): legs
+// in V-spread sweep through the spine-local torso ellipse each rotation,
+// which is not real clipping. Skipping the per-frame clamp prevents the
+// legs from twitching outward twice per revolution.
+let _SKIP_LEG_CLAMP = false;
 
 // ─── TIME CONTROL ────────────────────────────────────────────
 // `animClock` is the time fed to all animation functions. It advances with
@@ -2606,6 +2872,12 @@ function loop(ts) {
     // every solo mode so dramatic poses don't visually punch hands through
     // the torso.
     clampArmsThroughBody();
+    // Same idea for legs: catches knees crashing through the chest during
+    // freezes / toprock crosses, and stops one knee from punching past the
+    // other through the body's centerline. Cheap when not engaged (early
+    // break-out on first iteration). Skipped during windmill where legs
+    // legitimately pass through the body-local torso volume each rotation.
+    if (!_SKIP_LEG_CLAMP) clampLegsThroughBody();
     // Break choreography places the floor-contact point itself (head, shoulder,
     // hand). Re-applying foot/hand ground collision on top would shove the
     // whole body upward and turn floor moves into a hover. So we skip it here
