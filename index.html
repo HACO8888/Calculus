@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3D Human</title>
+<title>Super 的笑容</title>
 <style>
   /* ─── THEME TOKENS (env presets swap these via JS) ─────── */
   :root {
@@ -421,7 +421,7 @@
     <div id="brand">
       <span class="dot"></span>
       <div>
-        <div class="name">3D HUMAN</div>
+        <div class="name">SUPER 的笑容</div>
         <div class="sub">REAL-TIME</div>
       </div>
     </div>
@@ -1099,196 +1099,264 @@ const labelEl = document.getElementById('label');
 const formulaEl = document.getElementById('formulas');
 
 // ─── FORMULA DEFINITIONS ────────────────────────────────────
+// 慣例 (rotation sign convention) — 讀以下所有公式前先看這個
+//   *.x  正 = 後仰/伸展  ; 負 = 前彎/前抬     (anatomical flex)
+//   *.y  繞鉛直軸 (左右轉頭、轉肩)
+//   *.z  繞前後軸 (側傾、肩抬下)
+//   ARM_HANG_Z ≈ 0.17  (手臂自然下垂的肩膀內收量)
+//   BASE_Y     ≈ 1.05  (root 站立時的腰部高度)
 const FORMULAS = [
-  { key:'idle', title:'IDLE', sections:[
-    { name:'Body', rows:[
+  { key:'idle', title:'IDLE  · 站姿微呼吸', sections:[
+    { name:'Body  (呼吸 + 重心微擺)', rows:[
       ['y',        'BASE_Y + <em>sin</em>(0.85t) × 0.022'],
       ['spine.z',  '<em>sin</em>(0.42t) × 0.03'],
     ]},
-    { name:'Head', rows:[
+    { name:'Head  (環視 + 點頭)', rows:[
       ['neck.y',   '<em>sin</em>(0.3t) × 0.09'],
       ['neck.x',   '<em>sin</em>(0.5t) × 0.04'],
     ]},
-    { name:'Arms', rows:[
-      ['rSh.z / lSh.z', '−0.17 / +0.17'],
-      ['rElb.x',  '0.12 + <em>sin</em>(0.6t) × 0.04'],
-      ['lElb.x',  '0.12 + <em>sin</em>(0.7t) × 0.04'],
+    { name:'Arms  (carrying angle ≈ 7°前彎)', rows:[
+      ['rSh.z',    '−ARM_HANG_Z'],
+      ['lSh.z',    '+ARM_HANG_Z'],
+      ['rElb.x',   '−0.12 − <em>sin</em>(0.6t) × 0.04'],
+      ['lElb.x',   '−0.12 − <em>sin</em>(0.7t) × 0.04'],
+    ]},
+    { name:'Legs  (重心交替微移)', rows:[
+      ['rHip.z',   '+<em>sin</em>(0.42t) × 0.06'],
+      ['lHip.z',   '−<em>sin</em>(0.42t) × 0.06'],
+    ]},
+  ]},
+
+  { key:'walk', title:'WALK  ω=2.5  · 文獻對齊步態', sections:[
+    { name:'Phase', rows:[
+      ['ph',       'ω·t      (r = <em>sin</em>(ph), l = −r)'],
+    ]},
+    { name:'Legs  (髖 ±24° / 膝 mid-swing 60°)', rows:[
+      ['rHip.x',   '+<em>sin</em>(ph) × 0.42'],
+      ['lHip.x',   '−<em>sin</em>(ph) × 0.42'],
+      ['rKn.x',    'max(0, −<em>cos</em>(ph)) × 1.05'],
+      ['lKn.x',    'max(0, +<em>cos</em>(ph)) × 1.05'],
+      ['rAnk.x',   'max(0, +<em>sin</em>(ph)) × 0.18  ←蹬地'],
+      ['lAnk.x',   'max(0, −<em>sin</em>(ph)) × 0.18'],
+    ]},
+    { name:'Arms  (反相對位 ±18°)', rows:[
+      ['rSh.x',    '−<em>sin</em>(ph) × 0.32'],
+      ['lSh.x',    '+<em>sin</em>(ph) × 0.32'],
+      ['rSh.z',    '−ARM_HANG_Z'],
+      ['lSh.z',    '+ARM_HANG_Z'],
+      ['elb.x',    '−0.22  (12°前彎)'],
+    ]},
+    { name:'Body  (步頻 2× 上下彈跳)', rows:[
+      ['y',        'BASE_Y + |<em>sin</em>(2·ph)| × 0.035'],
+      ['spine.y',  '−<em>sin</em>(ph) × 0.06  (胸反扭髖)'],
+    ]},
+  ]},
+
+  { key:'wave', title:'WAVE  ω=3.4  · 揮手 (idle 為底)', sections:[
+    { name:'Base', rows:[
+      ['先呼叫',   'animIdle(t)  → 全身呼吸/微擺'],
+    ]},
+    { name:'R 上臂  (舉 ≈145°,雨刷掃 ±18°)', rows:[
+      ['rSh.z',    '+2.55 + <em>sin</em>(ωt) × 0.32'],
+      ['rSh.x',    '−0.18'],
+      ['rSh.y',    '0'],
+    ]},
+    { name:'R 前臂  (彎 ≈75° + 微呼吸)', rows:[
+      ['rElb.x',   '−1.30 + <em>sin</em>(ωt/2) × 0.06'],
+      ['rElb.y/z', '0'],
+    ]},
+    { name:'L Arm  (放鬆下垂)', rows:[
+      ['lSh.z',    '+ARM_HANG_Z'],
+      ['lSh.x',    '0'],
+      ['lElb.x',   '−0.10'],
+    ]},
+  ]},
+
+  { key:'dance', title:'DANCE  ω=4.5  · beat envelope', sections:[
+    { name:'Beat envelope', rows:[
+      ['beat',     '|<em>sin</em>(ωt/2)|^0.5'],
+    ]},
+    { name:'Body  (旋轉 + 拍點下蹲)', rows:[
+      ['root.rot.y','<em>sin</em>(ωt/2) × 0.38'],
+      ['root.rot.z','<em>sin</em>(ωt) × 0.09'],
+      ['root.y',   'BASE_Y + beat × 0.14'],
+      ['root.x',   '<em>sin</em>(ωt/4) × 0.18'],
+      ['spine.z',  '<em>sin</em>(ωt/2) × 0.14'],
+      ['spine.y',  '<em>sin</em>(ωt·0.6) × 0.16'],
+      ['spine.x',  '−beat × 0.12'],
+      ['neck.y',   '<em>sin</em>(ωt) × 0.25'],
+      ['neck.z',   '<em>sin</em>(ωt·1.2) × 0.08'],
+      ['neck.x',   '−beat × 0.15'],
+    ]},
+    { name:'Arms  (外展 + 前臂前彎)', rows:[
+      ['rSh.z',    '+0.55 + <em>sin</em>(ωt) × 0.58'],
+      ['lSh.z',    '−0.55 − <em>sin</em>(ωt+π) × 0.58'],
+      ['rSh.x',    '+<em>cos</em>(ωt) × 0.42'],
+      ['lSh.x',    '−<em>cos</em>(ωt) × 0.42'],
+      ['rElb.x',   '−0.7 − <em>sin</em>(1.4ωt) × 0.32'],
+      ['lElb.x',   '−0.7 − <em>sin</em>(1.4ωt+1) × 0.32'],
+      ['elb.z',    '±<em>sin</em>(2ωt+φ) × 0.22'],
     ]},
     { name:'Legs', rows:[
-      ['rHip.z',  '+<em>sin</em>(0.42t) × 0.06'],
-      ['lHip.z',  '−<em>sin</em>(0.42t) × 0.06'],
+      ['rHip.x',   '+<em>sin</em>(ωt) × 0.32'],
+      ['lHip.x',   '−<em>sin</em>(ωt) × 0.32'],
+      ['rHip.z',   '+<em>sin</em>(ωt/2+0.5) × 0.12'],
+      ['lHip.z',   '−<em>sin</em>(ωt/2+0.5) × 0.12'],
+      ['rKn.x',    'max(0,<em>sin</em>(ωt+0.9)) × 0.55'],
+      ['lKn.x',    'max(0,<em>sin</em>(ωt+0.9+π)) × 0.55'],
+      ['ank.x',    '<em>sin</em>(1.5ωt+φ) × 0.18'],
     ]},
   ]},
-  { key:'walk', title:'WALK  ω=2.8', sections:[
-    { name:'Legs', rows:[
-      ['rHip.x',  '+<em>sin</em>(ωt) × 0.52'],
-      ['lHip.x',  '−<em>sin</em>(ωt) × 0.52'],
-      ['rKn.x',   'max(0,+<em>sin</em>(ωt)) × 0.72'],
-      ['lKn.x',   'max(0,−<em>sin</em>(ωt)) × 0.72'],
+
+  { key:'run', title:'RUN  ω=5.0  · 衝刺前傾', sections:[
+    { name:'Phase', rows:[
+      ['ph',       'ω·t      (r = <em>sin</em>(ph), l = −r)'],
     ]},
-    { name:'Arms', rows:[
-      ['rSh.x',   '−<em>sin</em>(ωt) × 0.27'],
-      ['lSh.x',   '+<em>sin</em>(ωt) × 0.27'],
-      ['elb.x',   '0.12'],
+    { name:'Body  (前傾 + 反扭 + 上下彈跳)', rows:[
+      ['y',        'BASE_Y + |<em>sin</em>(2·ph)| × 0.07'],
+      ['root.rot.x','−0.08  (前傾 ≈5°)'],
+      ['spine.x',  '−0.06'],
+      ['spine.y',  '−<em>sin</em>(ph) × 0.10'],
+      ['neck.x',   '+0.08  (頭抬補償)'],
     ]},
-    { name:'Body', rows:[
-      ['y',       'BASE + |<em>sin</em>(2ωt)| × 0.036'],
-      ['spine.y', '<em>sin</em>(ωt) × 0.07'],
+    { name:'Arms  (90°屈, 上臂 ±31°擺動)', rows:[
+      ['rSh.x',    '−<em>sin</em>(ph) × 0.55'],
+      ['lSh.x',    '+<em>sin</em>(ph) × 0.55'],
+      ['rSh.z',    '−ARM_HANG_Z'],
+      ['lSh.z',    '+ARM_HANG_Z'],
+      ['rElb.x',   '−1.30 + <em>sin</em>(ph) × 0.15'],
+      ['lElb.x',   '−1.30 − <em>sin</em>(ph) × 0.15'],
     ]},
-  ]},
-  { key:'wave', title:'WAVE  ω=3.4', sections:[
-    { name:'R Shoulder', rows:[
-      ['rSh.z',   '2.55 + <em>sin</em>(ωt) × 0.32'],
-      ['rSh.x',   '−0.18'],
-    ]},
-    { name:'R Elbow', rows:[
-      ['rElb.x',  '−1.30 + <em>sin</em>(ωt/2) × 0.06'],
-    ]},
-    { name:'L Arm', rows:[
-      ['lSh.z',   '+0.06'],
-      ['lElb.x',  '−0.10'],
-    ]},
-    { name:'Body', rows:[
-      ['y',       'BASE + <em>sin</em>(0.85t) × 0.022'],
-      ['neck.y',  '<em>sin</em>(0.3t) × 0.09'],
+    { name:'Legs  (髖 ±37° / 膝 ≈80°)', rows:[
+      ['rHip.x',   '+<em>sin</em>(ph) × 0.65'],
+      ['lHip.x',   '−<em>sin</em>(ph) × 0.65'],
+      ['rKn.x',    'max(0, −<em>cos</em>(ph)) × 1.40'],
+      ['lKn.x',    'max(0, +<em>cos</em>(ph)) × 1.40'],
+      ['rAnk.x',   'max(0, +<em>sin</em>(ph)) × 0.30'],
+      ['lAnk.x',   'max(0, −<em>sin</em>(ph)) × 0.30'],
     ]},
   ]},
-  { key:'dance', title:'DANCE  ω=4.5', sections:[
-    { name:'beat = |<em>sin</em>(ωt/2)|^0.5', rows:[]},
-    { name:'Body', rows:[
-      ['rot.y',   '<em>sin</em>(ωt/2) × 0.38'],
-      ['rot.z',   '<em>sin</em>(ωt) × 0.09'],
-      ['y',       'BASE + beat × 0.14'],
-      ['pos.x',   '<em>sin</em>(ωt/4) × 0.18'],
-      ['spine.z', '<em>sin</em>(ωt/2) × 0.14'],
-      ['spine.y', '<em>sin</em>(ωt×0.6) × 0.16'],
-      ['spine.x', '−beat × 0.12'],
-      ['neck.y',  '<em>sin</em>(ωt) × 0.25'],
-      ['neck.x',  '−beat × 0.15'],
+
+  { key:'break', title:'BREAK  · 14s 五段循環', sections:[
+    { name:'① Toprock  0–2.5s  ω=3.0  ≈95 BPM', rows:[
+      ['ph',       'ω·t'],
+      ['swing',    '<em>sin</em>(ph)'],
+      ['beat',     '|<em>sin</em>(ph)|⁴  (尖銳拍點)'],
+      ['root.y',   'BASE_Y − 0.04 + 0.06·beat'],
+      ['root.x',   'swing × 0.12'],
+      ['spine.x',  '−beat × 0.14'],
+      ['spine.z',  '−swing × 0.10'],
+      ['spine.y',  '+swing × 0.20'],
+      ['neck.x',   '−beat × 0.18'],
+      ['neck.y',   '+swing × 0.28'],
+      ['rHip.x',   '+swing × 0.45'],
+      ['lHip.x',   '−swing × 0.45'],
+      ['rKn.x',    'max(0,+swing) × 0.75'],
+      ['lKn.x',    'max(0,−swing) × 0.75'],
+      ['rSh.x',    '−swing × 0.45  (反向擺臂)'],
+      ['lSh.x',    '+swing × 0.45'],
+      ['elb.x',    '−1.40 − 0.20·beat'],
+      ['elb.z',    '±<em>sin</em>(2·ph) × 0.15'],
     ]},
-    { name:'Arms', rows:[
-      ['rSh.z',   '−0.55 + <em>sin</em>(ωt) × 0.58'],
-      ['lSh.z',   '+0.55 + <em>sin</em>(ωt+π) × 0.58'],
-      ['rSh.x',   '+<em>cos</em>(ωt) × 0.42'],
-      ['lSh.x',   '−<em>cos</em>(ωt) × 0.42'],
-      ['elb.x',   '0.7 + <em>sin</em>(1.4ωt) × 0.32'],
-      ['elb.z',   '<em>sin</em>(2ωt) × 0.22'],
+    { name:'② Windmill  2.5–6s  · 3 圈/3.5s', rows:[
+      ['θ',        'lt · 6π/3.5'],
+      ['drop',     '<em>clamp</em>(lt·4, 0,1)'],
+      ['root.y',   'lerp(BASE_Y, 0.30, drop)'],
+      ['root.rot.x','lerp(0, −π/2+0.04, drop)  ←平躺'],
+      ['root.rot.y','θ  (繞世界 Y)'],
+      ['root.rot.z','<em>sin</em>(2θ) × 0.10'],
+      ['lp',       '2θ  (腿擺 2× 體旋)'],
+      ['rHip.z',   '+1.00 + 0.18·<em>cos</em>(lp)'],
+      ['lHip.z',   '−1.00 − 0.18·<em>cos</em>(lp+π)'],
+      ['rHip.x',   '−0.45 − 0.20·<em>sin</em>(lp)'],
+      ['lHip.x',   '−0.45 − 0.20·<em>sin</em>(lp+π)'],
+      ['Sh.x',     '−0.55  (手抱胸不掃地)'],
+      ['Sh.z',     '∓0.38'],
+      ['Elb.x',    '−1.30'],
+      ['note',     'Euler YXZ — Y 在 X 之前以繞世界軸'],
     ]},
-    { name:'Legs', rows:[
-      ['rHip.x',  '+<em>sin</em>(ωt) × 0.32'],
-      ['lHip.x',  '−<em>sin</em>(ωt) × 0.32'],
-      ['rHip.z',  '+<em>sin</em>(ωt/2+0.5) × 0.12'],
-      ['lHip.z',  '−<em>sin</em>(ωt/2+0.5) × 0.12'],
-      ['kn.x',    'max(0,<em>sin</em>(ωt+0.9)) × 0.55'],
-      ['ank.x',   '<em>sin</em>(1.5ωt) × 0.18'],
+    { name:'③ Headspin  6–9.5s  ω=7.5  ≈1.2 rev/s', rows:[
+      ['fi',       '<em>clamp</em>(lt·3.5, 0,1)'],
+      ['root.y',   'lerp(0.30, 1.60, fi)'],
+      ['root.rot.x','lerp(−π/2+0.05, −(π−0.22), fi)'],
+      ['root.rot.y','ω·lt  (持續旋)'],
+      ['pump',     '<em>sin</em>(2π·1.6·lt)'],
+      ['spread',   '0.85 + pump × 0.20'],
+      ['rHip.z',   '+spread'],
+      ['lHip.z',   '−spread'],
+      ['tuck',     '<em>clamp</em>(−pump, 0,1)'],
+      ['kn.x',     '0.10 + tuck × 0.45'],
+      ['rSh.z',    '−0.30'],
+      ['lSh.z',    '+0.30'],
+      ['Elb.x',    '−0.85 − tuck × 0.20'],
+      ['note',     '收腿 → 動量守恆 → 加速旋轉'],
     ]},
-  ]},
-  { key:'run', title:'RUN  ω=5.5', sections:[
-    { name:'Body', rows:[
-      ['y',       'BASE + |<em>sin</em>(2ωt)| × 0.08'],
-      ['rot.x',   '−0.1  (前傾)'],
-      ['spine.x', '−0.08'],
-      ['neck.x',  '+0.08'],
-      ['spine.y', '<em>sin</em>(ωt) × 0.1'],
+    { name:'④ Side-Chair Freeze  9.5–11.5s', rows:[
+      ['fi',       '<em>clamp</em>(lt·5.5, 0,1)'],
+      ['root.y',   'lerp(1.60, 0.85, fi)'],
+      ['root.rot.x','lerp(−(π−0.22), −0.18, fi)'],
+      ['root.rot.z','lerp(0, 0.42, fi)  (右傾 24°)'],
+      ['rSh.z',    'lerp(−0.52, −0.20, fi)  ←支柱'],
+      ['rElb.x',   'lerp(−0.32, −0.08, fi)  ≈直臂'],
+      ['lSh.z',    'lerp(+0.52, +1.55, fi)  反平衡'],
+      ['lSh.x',    'lerp(+0.22, −0.45, fi)'],
+      ['rHip.x',   'lerp(+0.28, +1.45, fi)  ↑高踢'],
+      ['lHip.x',   'lerp(−0.28, +0.45, fi)  ↓收'],
+      ['lKn.x',    'lerp(0.28, 2.20, fi)'],
+      ['strain',   '<em>clamp</em>((lt−0.4)·1.5, 0,1)'],
+      ['wobble',   '(<em>sin</em>(11.3t)·0.014 + <em>sin</em>(7.1t)·0.008)·strain'],
     ]},
-    { name:'Arms', rows:[
-      ['rSh.x',   '−<em>sin</em>(ωt) × 0.55'],
-      ['lSh.x',   '+<em>sin</em>(ωt) × 0.55'],
-      ['rElb.x',  '0.6 + <em>sin</em>(ωt) × 0.3'],
-      ['lElb.x',  '0.6 − <em>sin</em>(ωt) × 0.3'],
-    ]},
-    { name:'Legs', rows:[
-      ['rHip.x',  '+<em>sin</em>(ωt) × 0.72'],
-      ['lHip.x',  '−<em>sin</em>(ωt) × 0.72'],
-      ['rKn.x',   'max(0,+<em>sin</em>(ωt)) × 1.0'],
-      ['lKn.x',   'max(0,−<em>sin</em>(ωt)) × 1.0'],
-    ]},
-  ]},
-  { key:'break', title:'BREAK  [14s cycle]', sections:[
-    { name:'① Toprock  0–2.5s  ω=3.2', rows:[
-      ['beat',    '|<em>sin</em>(ωt)|'],
-      ['y',       'BASE + beat³ × 0.14'],
-      ['spine.x', '−beat × 0.18'],
-      ['spine.z', '<em>sin</em>(ωt) × 0.18'],
-      ['neck.x',  '−beat × 0.22'],
-      ['rHip.x',  '+<em>sin</em>(ωt) × 0.62'],
-      ['lHip.x',  '−<em>sin</em>(ωt) × 0.62'],
-      ['kn.x',    'max(0, ±<em>sin</em>(ωt)) × 0.85'],
-      ['rSh.z',   '−0.55+<em>sin</em>(ωt+0.3)×0.38'],
-      ['elb.z',   '<em>sin</em>(2ωt) × 0.25'],
-    ]},
-    { name:'② Windmill  2.5–6s', rows:[
-      ['θ',       'lt × 6π/3.5  (3 rot.)'],
-      ['drop',    '<em>clamp</em>(lt×6, 0,1)'],
-      ['rot.y',   'θ'],
-      ['rot.x',   'lerp(0,−0.72,drop)+<em>sin</em>(θ)×0.42'],
-      ['rot.z',   '<em>cos</em>(θ) × 0.52'],
-      ['rHip.x',  '0.4+<em>sin</em>(θ+0.15)×1.2'],
-      ['lHip.x',  '−0.2+<em>sin</em>(θ+0.15+π)×1.2'],
-      ['rSh.z',   '−0.85+<em>sin</em>(θ)×0.9'],
-      ['lSh.z',   '+0.85+<em>sin</em>(θ+π)×0.9'],
-    ]},
-    { name:'③ Headspin  6–9.5s  ω=6.5', rows:[
-      ['fi',      '<em>clamp</em>(lt×3.5, 0,1)'],
-      ['root.y',  'lerp(0.2, 1.60, fi)'],
-      ['rot.x',   'lerp(−0.72, −(π−0.22), fi)'],
-      ['rot.y',   'lt×6.5  (spin)'],
-      ['rHip.z',  '+0.65+<em>sin</em>(lt×2.8)×0.14'],
-      ['lHip.z',  '−0.65−<em>sin</em>(lt×2.8)×0.14'],
-      ['rHip.x',  '<em>sin</em>(lt×3.2+0.4)×0.28'],
-    ]},
-    { name:'④ Air Chair  9.5–11.5s', rows:[
-      ['fi',      '<em>clamp</em>(lt×3, 0,1)'],
-      ['root.y',  'lerp(1.60, 0.42, fi)'],
-      ['rot.x',   'lerp(−(π−0.22),−0.22,fi)'],
-      ['rot.z',   'lerp(0, 0.72, fi)'],
-      ['rSh.z',   'lerp(−0.52, −π×0.56, fi)'],
-      ['lSh.z',   'lerp(+0.52, −0.12, fi)'],
-      ['rHip.x',  'lerp(0.28, 1.72, fi)  ↑kick'],
-      ['lHip.x',  'lerp(−0.28,−1.2, fi)  ↓tuck'],
-      ['lKn.x',   'lerp(0.28, 1.12, fi)'],
-      ['wobble',  '<em>sin</em>(11.3t)×0.016+<em>sin</em>(7.1t)×0.009'],
-    ]},
-    { name:'⑤ Get Up  11.5–14s', rows:[
-      ['ui',      '<em>clamp</em>(lt/1.8, 0,1)'],
-      ['root.y',  'lerp(0.42, BASE+0.14, ui)'],
-      ['rot.z',   'lerp(0.72, 0, ui)'],
-      ['rSh.z',   'lerp(−π×0.56, −0.52, ui)'],
-      ['rHip.x',  'lerp(1.72, 0.1, ui)'],
-      ['blend→toprock', 'ui > 0.65'],
+    { name:'⑤ Get Up  11.5–14s  · 兩段過渡', rows:[
+      ['a',        '<em>clamp</em>(lt/1.0, 0,1)'],
+      ['b',        '<em>clamp</em>((lt−1.0)/0.8, 0,1)'],
+      ['Stage A',  'freeze → 蹲 (0–1s)'],
+      ['Stage B',  '蹲 → 站 (1–1.8s, smoothstep)'],
+      ['SQ.root.y','BASE_Y − 0.55'],
+      ['SQ.kn',    '+1.55  (深蹲)'],
+      ['SQ.hip.x', '−0.95'],
+      ['ST',       '回到 toprock 起手式'],
+      ['settle',   'lt > 2.0 → 加 toprock 微彈'],
     ]},
   ]},
-  { key:'tennis', title:'TENNIS  rally physics', sections:[
-    { name:'Ball  ẋ = v', rows:[
-      ['v.y′',    '−g  (g = 9.81)'],
-      ['v′',      'v · 0.999  (drag)'],
-      ['bounce',  'v.y ↦ −0.62·v.y'],
-      ['skid',    'v.xz ↦ 0.93·v.xz'],
+
+  { key:'tennis', title:'TENNIS  · 真實彈道 + AI 預測', sections:[
+    { name:'Ball physics  ẋ = v', rows:[
+      ['v.y′',     'v.y − g·dt    (g = 9.81)'],
+      ['v′',       'v · 0.999     (空氣阻力)'],
+      ['bounce',   'v.y ↦ −0.62 · v.y'],
+      ['skid',     'v.xz ↦ 0.93 · v.xz'],
+      ['BALL_R',   '0.060'],
     ]},
-    { name:'Shot variants  v₀(target, h)', rows:[
-      ['vy₀',     '√(2g·(h−y₀))'],
-      ['T',       '(vy₀+√(vy₀²+2g·y₀))/g'],
-      ['vx₀',     '(xT−x₀) / T'],
-      ['vz₀',     '(zT−z₀) / T'],
+    { name:'Court (m)', rows:[
+      ['HALF_W',   '2.4'],
+      ['HALF_L',   '4.2'],
+      ['NET_H',    '0.95'],
+      ['STRIKE_Y', '[0.32, 2.05]'],
     ]},
-    { name:'Shot menu', rows:[
-      ['flat',    'h≈1.1  z deep, fast'],
-      ['topspin', 'h≈2.2  arcing, deep'],
-      ['slice',   'h≈1.0  low skid'],
-      ['lob',     'h≈4.5  high lift'],
-      ['drop',    'h≈1.3  short, near net'],
-      ['cross',   'h≈1.5  wide angle'],
+    { name:'Shot solver  v₀(target, h)', rows:[
+      ['vy₀',      '√(2g·(h−y₀))'],
+      ['T',        '(vy₀ + √(vy₀² + 2g·yT)) / g'],
+      ['vx₀',      '(xT − x₀) / T'],
+      ['vz₀',      '(zT − z₀) / T'],
+    ]},
+    { name:'Shot menu  (apex h)', rows:[
+      ['flat',     'h ≈ 1.1   深而快'],
+      ['topspin',  'h ≈ 2.2   弧線深球'],
+      ['slice',    'h ≈ 1.0   低彈滑行'],
+      ['lob',      'h ≈ 4.5   高吊'],
+      ['drop',     'h ≈ 1.3   近網短球'],
+      ['cross',    'h ≈ 1.5   斜角寬'],
     ]},
     { name:'AI chase  → intercept', rows:[
-      ['target',  'predictBounce(ball)'],
-      ['speed',   'min(4.5, 6·dist)'],
-      ['swing⇐',  '|p−racket| < 0.9'],
-      ['         ', 'y ∈ [0.35, 1.85]'],
+      ['target',   'predictBounce(ball)'],
+      ['speed',    'min(4.5, 6 · dist)'],
+      ['swing⇐',   '|p − racket| < RACKET_REACH (1.10)'],
+      ['         ','y ∈ [STRIKE_Y_MIN, STRIKE_Y_MAX]'],
     ]},
-    { name:'Rally ends', rows:[
-      ['out',     '|x|>HALF_W  ∨  bad side'],
-      ['net',     '|z|<0.06  ∧  y<0.95'],
-      ['miss',    'second bounce'],
+    { name:'Rally end', rows:[
+      ['out',      '|x| > HALF_W  ∨  錯邊'],
+      ['net',      '|z| < 0.06  ∧  y < NET_H'],
+      ['miss',     '第二次落地'],
     ]},
   ]},
 ];
