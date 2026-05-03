@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D Human · Tech Stack</title>
+<style>
+  :root {
+    --bg-from:#060a18; --bg-to:#0e1530;
+    --accent:#6df0d6; --accent-2:#9b8cff;
+    --text:#eaf2ff; --text-dim:#a7b6d4; --text-soft:#6f7c99;
+    --glass:rgba(255,255,255,.06); --glass-strong:rgba(255,255,255,.10);
+    --stroke:rgba(255,255,255,.12); --stroke-strong:rgba(255,255,255,.22);
+    --shadow:0 10px 40px rgba(0,0,0,.45);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { min-height:100%; background:var(--bg-to); }
+  body {
+    min-height:100vh;
+    color:var(--text);
+    font-family:'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:linear-gradient(180deg, var(--bg-from), var(--bg-to) 60%, var(--bg-to));
+    line-height:1.55;
+    padding:50px 24px 80px;
+  }
+  ::selection { background:var(--accent); color:#0a0f1f; }
+
+  .glass {
+    background:var(--glass); backdrop-filter:blur(22px) saturate(160%);
+    -webkit-backdrop-filter:blur(22px) saturate(160%);
+    border:1px solid var(--stroke); border-radius:14px;
+    box-shadow:var(--shadow);
+  }
+
+  .container { max-width:1080px; margin:0 auto; }
+
+  /* ─── Hero ─── */
+  .hero { text-align:center; padding:30px 20px 50px; }
+  .hero .crumb {
+    display:inline-flex; align-items:center; gap:10px;
+    padding:8px 14px; border-radius:999px;
+    background:var(--glass); border:1px solid var(--stroke);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    font:600 10px/1 'JetBrains Mono',monospace; letter-spacing:3px;
+    color:var(--text-dim); margin-bottom:24px;
+  }
+  .hero .crumb .dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 12px var(--accent);
+    animation:pulse 2s infinite;
+  }
+  @keyframes pulse { 50% { opacity:.45; } }
+  .hero h1 {
+    font:800 clamp(36px, 6vw, 64px)/1.05 'Inter',sans-serif;
+    letter-spacing:-1.5px; margin-bottom:18px;
+    background:linear-gradient(135deg, var(--text) 30%, var(--accent) 70%, var(--accent-2));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .hero p {
+    color:var(--text-dim); max-width:640px; margin:0 auto;
+    font-size:16px;
+  }
+  .hero .stats {
+    display:flex; gap:18px; justify-content:center; flex-wrap:wrap;
+    margin-top:32px;
+  }
+  .stat {
+    padding:14px 22px; border-radius:12px;
+    background:var(--glass); border:1px solid var(--stroke);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    min-width:120px;
+  }
+  .stat .v {
+    font:800 26px/1 'JetBrains Mono',monospace; color:var(--accent);
+    display:block; margin-bottom:4px;
+  }
+  .stat .l {
+    font:600 9px/1.2 'Inter',sans-serif; letter-spacing:2px;
+    text-transform:uppercase; color:var(--text-soft);
+  }
+
+  /* ─── Sections ─── */
+  .section { margin-top:40px; padding:32px; border-radius:18px; }
+  .section h2 {
+    font:700 14px/1 'JetBrains Mono',monospace; letter-spacing:3px;
+    text-transform:uppercase; margin-bottom:6px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section h2 .num {
+    font:700 11px/1 'JetBrains Mono',monospace;
+    color:#0a0f1f; background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    padding:4px 8px; border-radius:6px;
+  }
+  .section h2 .title { color:var(--text); }
+  .section .lede {
+    color:var(--text-dim); margin-bottom:22px; font-size:14px;
+  }
+
+  /* ─── Cards ─── */
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+  .card {
+    padding:18px; border-radius:12px;
+    background:rgba(255,255,255,.03); border:1px solid var(--stroke);
+    transition:.2s;
+  }
+  .card:hover { border-color:var(--stroke-strong); transform:translateY(-2px); }
+  .card .head {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:10px; gap:10px;
+  }
+  .card h3 {
+    font:700 12px/1.2 'JetBrains Mono',monospace; letter-spacing:1.5px;
+    color:var(--text); text-transform:uppercase;
+  }
+  .card .chip {
+    font:600 9px/1 'JetBrains Mono',monospace; letter-spacing:1px;
+    padding:4px 7px; border-radius:5px; flex-shrink:0;
+    background:rgba(109,240,214,.12); color:var(--accent);
+    border:1px solid rgba(109,240,214,.3);
+  }
+  .card .chip.warn { background:rgba(255,204,68,.12); color:#ffcc44;
+    border-color:rgba(255,204,68,.3); }
+  .card .chip.alt  { background:rgba(155,140,255,.12); color:var(--accent-2);
+    border-color:rgba(155,140,255,.3); }
+  .card p { color:var(--text-dim); font-size:13px; line-height:1.6; }
+  .card code {
+    font:500 11px/1.4 'JetBrains Mono',monospace;
+    background:rgba(0,0,0,.3); padding:1px 6px; border-radius:4px;
+    color:var(--accent); border:1px solid var(--stroke);
+  }
+
+  /* ─── Math/code blocks ─── */
+  pre.eq {
+    margin-top:12px; padding:12px 14px; border-radius:8px;
+    background:rgba(0,0,0,.35); border:1px solid var(--stroke);
+    font:500 11px/1.6 'JetBrains Mono',monospace; color:var(--text-dim);
+    overflow-x:auto; white-space:pre;
+  }
+  pre.eq em { color:var(--accent); font-style:normal; font-weight:700; }
+  pre.eq b  { color:var(--accent-2); font-weight:600; }
+
+  /* ─── Lists ─── */
+  ul.dotted { list-style:none; padding:0; margin-top:8px; }
+  ul.dotted li {
+    padding:6px 0 6px 22px; position:relative;
+    font-size:13px; color:var(--text-dim); line-height:1.55;
+  }
+  ul.dotted li::before {
+    content:''; position:absolute; left:6px; top:14px;
+    width:6px; height:6px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 8px var(--accent);
+  }
+  ul.dotted li b { color:var(--text); }
+
+  /* ─── Footer ─── */
+  footer {
+    margin-top:60px; text-align:center;
+    color:var(--text-soft); font-size:12px;
+  }
+  footer a { color:var(--accent); text-decoration:none; }
+  footer a:hover { text-decoration:underline; }
+
+  /* ─── Back link ─── */
+  .back {
+    position:fixed; top:18px; left:18px; z-index:10;
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 14px; border-radius:999px;
+    background:var(--glass); border:1px solid var(--stroke);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    color:var(--text-dim); text-decoration:none;
+    font:600 11px/1 'Inter',sans-serif; letter-spacing:1.5px;
+    transition:.2s;
+  }
+  .back:hover { color:var(--text); border-color:var(--stroke-strong); }
+  .back svg { stroke:currentColor; }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    body { padding:90px 14px 40px; }
+    .section { padding:22px; }
+  }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2L3 6l4 4"/></svg>
+  Back to demo
+</a>
+
+<div class="container">
+
+  <!-- ───── HERO ───── -->
+  <section class="hero">
+    <div class="crumb"><span class="dot"></span>TECH STACK · DECONSTRUCTED</div>
+    <h1>3D Human — How it's built</h1>
+    <p>
+      A single 3,891-line HTML file that renders 50 procedurally-generated humanoid avatars,
+      seven full-body animation modes (including a physics-driven tennis rally and a five-state
+      breakdance sequence), all inside the browser with no build step and no framework.
+      This page is a tour of every meaningful technique used.
+    </p>
+    <div class="stats">
+      <div class="stat"><span class="v">3,891</span><span class="l">Lines · 1 file</span></div>
+      <div class="stat"><span class="v">50</span><span class="l">Avatars</span></div>
+      <div class="stat"><span class="v">7</span><span class="l">Anim modes</span></div>
+      <div class="stat"><span class="v">120</span><span class="l">FPS target</span></div>
+      <div class="stat"><span class="v">0</span><span class="l">Framework deps</span></div>
+    </div>
+  </section>
+
+  <!-- ───── 1. RENDERING ───── -->
+  <section class="section glass">
+    <h2><span class="num">01</span><span class="title">Rendering Pipeline</span></h2>
+    <p class="lede">WebGL via Three.js — but the postprocessing chain and rig math are all hand-written.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>Three.js r128</h3><span class="chip">CDN</span></div>
+        <p>Core <code>WebGLRenderer</code> with PCF soft shadow maps, antialias, and a pixel ratio capped at 2 to keep retina screens fast.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>UnrealBloomPass</h3><span class="chip alt">Postprocessing</span></div>
+        <p>Loaded as r128 examples (CopyShader · LuminosityHighPassShader · EffectComposer · RenderPass · ShaderPass · UnrealBloomPass). Strength controlled live; composer skipped when strength≈0 to save GPU.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Edge artifact fix</h3><span class="chip warn">Gotcha</span></div>
+        <p>Composer needs <code>setPixelRatio()</code> matching the renderer, otherwise the bloom mip-chain samples 1px outside the texture and paints a white strip on the right edge.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Materials</h3><span class="chip">MeshPhongMaterial</span></div>
+        <p>Geometry helpers (<code>mkSphere</code>, <code>mkCyl</code>, <code>mkBox</code>, <code>mkLimb</code>) clone a Phong base material with emissive on glow parts (eyes, chest panel, joints, ball sweet-spot) so bloom has something to grab.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Lighting</h3><span class="chip">3-point + fog</span></div>
+        <p>Directional sun (shadow caster), ambient blue, two coloured point lights. Each environment preset retunes colour temperature, intensity and <code>FogExp2</code> density together.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Floor modes</h3><span class="chip">Live swap</span></div>
+        <p>Single PlaneGeometry whose Phong shininess and color are mutated to fake Grid / Mirror / Matte / Hide states without rebuilding meshes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── 2. RIG ───── -->
+  <section class="section glass">
+    <h2><span class="num">02</span><span class="title">Procedural Rig</span></h2>
+    <p class="lede">No GLTF import — every limb is a nested <code>THREE.Group</code> tree assembled at runtime.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>Nested groups as bones</h3><span class="chip">Hierarchy</span></div>
+        <p>root → spine → neck → head, plus shoulder → elbow → hand and hip → knee → ankle → foot. Each Group's local rotation = a joint angle; child position = bone length. Pure forward kinematics.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>50 procedural avatars</h3><span class="chip alt">Combinatorics</span></div>
+        <p>Each character is a config object indexing into 10 skin tones × 13 hair colours × 11 hair styles × 15 shirts × 10 pants × 8 panels × 8 eyes + accessory + scale. Index hashes use coprime stride multipliers (3, 7, 11, 13, 17) for visual diversity.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Vitruvian proportions</h3><span class="chip">Anatomy</span></div>
+        <p>Shoulder X = 0.50 of body height; upper arm 0.66 + forearm 0.55 ≈ 32% of body height. Head scaled 0.79 to land near 6.5-head adult proportions.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Penetration clamps</h3><span class="chip warn">穿模 防護</span></div>
+        <p><code>clampArmsThroughBody</code> tests hand / elbow / forearm-midpoint positions in spine-local space against a torso ellipsoid; if inside, pushes outward along Z. <code>clampLegsThroughBody</code> does the same with knees + feet against a body ellipsoid and a knee-cross check.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Floor pinning</h3><span class="chip">Soft IK</span></div>
+        <p><code>applyGroundCollision</code> probes ankles/feet world Y; if any point sinks below floor level, the whole root translates up just enough to bring the lowest point back to ground. Skipped during break-mode floor work where the contact point is choreographed directly.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Tennis racket</h3><span class="chip alt">Composite</span></div>
+        <p>Built once and parented to <code>rHnd</code>. Has a <code>userData.sweet</code> world-space marker (ball strike origin) that the swing resolver reads to compute exit velocity.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── 3. ANIM ───── -->
+  <section class="section glass">
+    <h2><span class="num">03</span><span class="title">Animation Math</span></h2>
+    <p class="lede">Every pose is a function of <code>t</code> (time) and clamped state — no keyframe storage, no skeletal blend trees.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>Idle / Walk / Run</h3><span class="chip">sin(ωt)</span></div>
+        <p>Cyclic motion driven by sine waves with hand-tuned ω per mode. Walk uses ω=2.8 with phase-locked shoulder counter-swing; Run jumps to ω=6.4 plus a vertical lift ∝ |sin(2ωt)|.</p>
+        <pre class="eq">rHip.x = +<em>sin</em>(ωt) × 0.52
+lHip.x = −<em>sin</em>(ωt) × 0.52
+rKn.x  = max(0,+<em>sin</em>(ωt)) × 0.72</pre>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Wave / Dance</h3><span class="chip">Composite</span></div>
+        <p>Wave is one shoulder lift + a high-frequency forearm waggle. Dance layers a beat envelope <code>|sin(ωt/2)|^0.6</code> on top of body sway, neck head-bob and arm pump.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Break: 5-state machine</h3><span class="chip alt">Choreography</span></div>
+        <p>Toprock → Windmill → Headspin → Freeze → Get-up. Each state is its own pose function; transitions happen at fixed time stamps. Windmill skips the leg-clamp because legs legitimately sweep through the body-local torso volume each rotation.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Tennis rally physics</h3><span class="chip">Real ballistics</span></div>
+        <p>Ball updates with gravity 9.81 m/s², 0.999 drag per tick, vertical bounce coefficient −0.62, ground-skid coefficient 0.93. Shot variants (flat / topspin / slice / lob / drop / cross) just pick a target apex height.</p>
+        <pre class="eq">v.y' = v.y − g · dt
+v   = v · 0.999            <b>(drag)</b>
+on bounce: v.y ← −0.62·v.y
+           v.xz ← 0.93·v.xz</pre>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Trajectory prediction</h3><span class="chip alt">AI</span></div>
+        <p><code>predictBall(dtAhead, …)</code> rolls the ball physics forward in a fixed-step loop. <code>predictIntercept(side)</code> walks the prediction until the ball crosses the player's baseline plane, returning {time, position} → AI runs to it.</p>
+        <pre class="eq">v_y₀ = √(2g·(h−y₀))
+T    = (v_y₀+√(v_y₀²+2g·y_x))/g
+v_x  = (xT−x₀) / T
+v_z  = (zT−z₀) / T</pre>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Serve kinetic chain</h3><span class="chip">Biomechanics</span></div>
+        <p>Trophy → drive → strike → follow-through. Phases drive shoulder, elbow and torso angles in sequence, magnetising the ball to the racket sweet-spot at strike t.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── 4. UI ───── -->
+  <section class="section glass">
+    <h2><span class="num">04</span><span class="title">UI System</span></h2>
+    <p class="lede">Glassmorphism rendered with native CSS — no UI framework, no icon library.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>Glassmorphism</h3><span class="chip">CSS only</span></div>
+        <p>Every panel uses <code>backdrop-filter: blur(22px) saturate(160%)</code> over a translucent background, with rgba strokes for the rim-light effect. Falls back gracefully on browsers without backdrop-filter.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Theme tokens</h3><span class="chip alt">CSS Vars</span></div>
+        <p>Four environment themes (Cyber Night · Daylight · Sunset · Arena) are pure variable swaps on <code>body.theme-*</code>. The same swap also retunes Three.js lights & fog so 2D and 3D stay consistent.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Inline SVG icons</h3><span class="chip">Pixel-perfect</span></div>
+        <p>Earlier versions used unicode glyphs (⏸ ⌖ 📸 ⚙ etc) but per-OS font metrics offset them off-centre inside circular buttons. Switching to <code>fill="currentColor"</code> SVG paths fixes alignment and lets the icon inherit hover / active colour.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Custom select chevron</h3><span class="chip warn">Cross-browser</span></div>
+        <p>Native select arrows render at different positions per platform. Inline SVG data-URI background-image + <code>appearance:none</code> gives identical visuals everywhere.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>localStorage v1</h3><span class="chip">Persistence</span></div>
+        <p>Single versioned key <code>3dhuman.settings.v1</code> stores env, floor, FOV, speed, mode, char A/B, formula collapse, bloom strength and per-character colour overrides as a diff. Restored on init in dependency order.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>scroll-padding-top</h3><span class="chip warn">Subtle bug</span></div>
+        <p>Formula panel uses <code>scrollIntoView({block:'start'})</code> to keep the active block visible. To avoid the floating 𝑓 toggle covering its top edge, the panel has <code>scroll-padding-top</code> instead of regular padding-top.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── 5. INPUT ───── -->
+  <section class="section glass">
+    <h2><span class="num">05</span><span class="title">Input &amp; Capture</span></h2>
+    <p class="lede">Keyboard, mouse and screen recording — all in browser native APIs.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>Camera orbit</h3><span class="chip">Spherical</span></div>
+        <p>Camera position computed from (R, θ, φ). Mouse drag updates θ/φ; wheel updates R, both with explicit clamps so the camera never enters the floor or flips upside-down.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>WASD / QE state machine</h3><span class="chip alt">Per-frame</span></div>
+        <p>Keydown flips a flag in <code>camKeys</code>, keyup clears it. A separate rAF tick integrates flag × dt every frame so movement is smooth regardless of OS key-repeat rate.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Screenshot</h3><span class="chip">toBlob</span></div>
+        <p>Force a render → <code>renderer.domElement.toBlob('image/png')</code> → download via dynamic <code>&lt;a&gt;</code>. No server round-trip.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Video recording</h3><span class="chip">MediaRecorder</span></div>
+        <p><code>canvas.captureStream(60)</code> piped into MediaRecorder with VP9 / VP8 fallback and 8 Mbps bitrate. Chunks collected on <code>dataavailable</code>, blob saved on <code>stop</code>.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Hotkey hygiene</h3><span class="chip warn">Gotcha</span></div>
+        <p>Pressing C used to open the avatar grid <em>and</em> type "c" into the now-focused search field. Fix: <code>e.preventDefault()</code> for any letter hotkey that focuses an input.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Time scrub</h3><span class="chip">timeScale</span></div>
+        <p>Single <code>animClock</code> advances by realDt × timeScale. Pause freezes the clock; the speed slider stretches it; the step button advances 1/60 s while paused. Every animation function trusts the clock.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───── 6. PERF ───── -->
+  <section class="section glass">
+    <h2><span class="num">06</span><span class="title">Performance Notes</span></h2>
+    <p class="lede">Animation runs at ~120 FPS on a recent MacBook even with bloom + shadows.</p>
+    <ul class="dotted">
+      <li><b>Module-level scratch vectors.</b> Hot paths reuse <code>_simP</code>, <code>_simV</code>, <code>_racketHit</code>, <code>_lv</code>, <code>_h3</code>, <code>_e3</code>, <code>_m3</code>, <code>_kr</code>, <code>_kl</code>, <code>_fr</code>, <code>_fl</code>, <code>_wp</code> — never allocating a Vector3 per frame.</li>
+      <li><b>Conditional composer.</b> Bloom strength &lt; 0.001 → fall through to plain <code>renderer.render()</code>, skipping the entire postprocessing chain.</li>
+      <li><b>Single-file deployment.</b> Zero round trips for application code. Only Three.js + 6 postprocessing scripts come from CDN.</li>
+      <li><b>Disposal on character swap.</b> <code>disposeCharacter</code> walks the old root and calls <code>geometry.dispose()</code> + <code>material.dispose()</code> before adding the new one — avoids GPU memory creep when cycling 50 avatars.</li>
+      <li><b>Prediction step caps.</b> Tennis intercept loop is hard-capped at 4 s of look-ahead in 1/60 s steps; AI never runs more than 240 mini-steps per frame.</li>
+      <li><b>EMA-smoothed FPS counter.</b> Updates every 500 ms, 60/40 weighted EMA, so the read-out doesn't flicker from sub-frame jitter.</li>
+    </ul>
+  </section>
+
+  <!-- ───── 7. DEPLOY ───── -->
+  <section class="section glass">
+    <h2><span class="num">07</span><span class="title">Why no framework?</span></h2>
+    <p class="lede">An explicit anti-decision worth documenting.</p>
+    <div class="grid">
+      <div class="card">
+        <div class="head"><h3>The scope didn't justify it</h3><span class="chip">Honest</span></div>
+        <p>Single-page demo. Zero routing, zero shared component reuse, no team. A framework here would be 100% overhead and 0% benefit.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>No build step</h3><span class="chip alt">DX</span></div>
+        <p>One <code>index.html</code>. Open in any browser via file:// or any static host. No <code>npm install</code>, no Vite config, no bundle hash. Source view shows everything.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>What would framework adoption buy?</h3><span class="chip warn">Tradeoff</span></div>
+        <p>Reactive UI bindings — but the chrome here is small enough that <code>addEventListener</code> + manual DOM updates take 30 lines instead of 300 lines + library. Component re-use — N/A here.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>What it would cost</h3><span class="chip warn">Risk</span></div>
+        <p>~3,900 lines of working code to migrate, hours of regression testing on the tennis physics and break-state machine, plus a build pipeline to maintain forever.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Built with Three.js r128 + vanilla JS · No build step · <a href="index.html">Back to the demo</a></p>
+  </footer>
+
+</div>
+
+</body>
+</html>
