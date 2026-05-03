@@ -5,192 +5,589 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3D Human</title>
 <style>
+  /* ─── THEME TOKENS (env presets swap these via JS) ─────── */
+  :root {
+    --bg-from: #060a18;
+    --bg-to:   #0e1530;
+    --accent:  #6df0d6;
+    --accent-2:#9b8cff;
+    --text:    #eaf2ff;
+    --text-dim:#a7b6d4;
+    --text-soft:#6f7c99;
+    --glass:   rgba(255,255,255,0.06);
+    --glass-strong: rgba(255,255,255,0.10);
+    --stroke:  rgba(255,255,255,0.12);
+    --stroke-strong: rgba(255,255,255,0.22);
+    --shadow:  0 10px 40px rgba(0,0,0,.45);
+    --radius:  14px;
+    --radius-sm: 10px;
+  }
+  body.theme-day {
+    --bg-from:#dfe8ff; --bg-to:#b9c8e8;
+    --accent:#1e88ff; --accent-2:#ff6aa9;
+    --text:#0c1424; --text-dim:#3a4a66; --text-soft:#6c7a94;
+    --glass:rgba(255,255,255,0.45); --glass-strong:rgba(255,255,255,0.6);
+    --stroke:rgba(20,30,60,0.12); --stroke-strong:rgba(20,30,60,0.22);
+  }
+  body.theme-sunset {
+    --bg-from:#3a1840; --bg-to:#ff7b3a;
+    --accent:#ffd66b; --accent-2:#ff5fa2;
+  }
+  body.theme-arena {
+    --bg-from:#0c1a2c; --bg-to:#1d3556;
+    --accent:#74d4ff; --accent-2:#ffe066;
+  }
+
   * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { width:100%; height:100%; overflow:hidden; background:#040911; }
+  html, body { width:100%; height:100%; overflow:hidden;
+    color:var(--text);
+    font-family:'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:radial-gradient(120% 90% at 50% 0%, var(--bg-from), var(--bg-to));
+    transition:background .6s ease;
+  }
   #c { display:block; width:100%; height:100%; }
 
-  #controls {
-    position:fixed; bottom:0; left:0; right:0; padding:14px 0 18px;
-    display:flex; justify-content:center; gap:8px;
-    background:linear-gradient(transparent, #040911ee);
-    pointer-events:none;
+  /* Subtle ambient noise + vignette overlay (replaces scanlines) */
+  #overlay {
+    position:fixed; inset:0; pointer-events:none; z-index:1;
+    background:
+      radial-gradient(120% 80% at 50% 110%, rgba(0,0,0,.45), transparent 60%),
+      radial-gradient(80% 60% at 50% -10%, rgba(255,255,255,.04), transparent 70%);
   }
+
+  /* ─── GLASS PRIMITIVE ──────────────────────────────────── */
+  .glass {
+    background:var(--glass);
+    backdrop-filter:blur(22px) saturate(160%);
+    -webkit-backdrop-filter:blur(22px) saturate(160%);
+    border:1px solid var(--stroke);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+
+  /* ─── TOP HEADER (full-width app bar) ──────────────────── */
+  #topbar {
+    position:fixed; top:14px; left:14px; right:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 14px; z-index:10; gap:14px;
+    border-radius:18px;
+  }
+  #topbar .t-left, #topbar .t-right { display:flex; align-items:center; gap:14px; flex:0 0 auto; }
+  #topbar .t-center { display:flex; align-items:center; gap:8px; flex:1 1 auto; justify-content:center; }
+  #topbar .t-right { justify-content:flex-end; }
+
+  .pill-group { display:flex; align-items:center; gap:2px; padding:2px; border-radius:999px;
+    background:rgba(255,255,255,.04); border:1px solid var(--stroke); }
   .btn {
-    padding:9px 22px; border:1px solid #00ffaa33;
-    background:transparent; color:#00ffaa66;
-    font-family:'Courier New',monospace; font-size:11px;
-    letter-spacing:2px; text-transform:uppercase;
-    cursor:pointer; transition:.2s; pointer-events:all;
+    appearance:none; border:0; cursor:pointer; outline:none;
+    padding:7px 14px; border-radius:999px;
+    background:transparent; color:var(--text-dim);
+    font:600 11px/1 'Inter',sans-serif; letter-spacing:1.3px;
+    text-transform:uppercase;
+    transition:all .2s cubic-bezier(.4,0,.2,1);
+    display:inline-flex; align-items:center; gap:6px;
+    height:30px;
   }
-  .btn:hover { border-color:#00ffaa88; color:#00ffaacc; background:#00ffaa0a; }
-  .btn.active { border-color:#00ffaa; color:#00ffaa; background:#00ffaa18; }
+  .btn:hover { color:var(--text); background:rgba(255,255,255,.06); }
+  .btn.active {
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    color:#0a0f1f; box-shadow:0 4px 16px rgba(109,240,214,.35);
+  }
+  body.theme-day .btn.active { color:#fff; }
+
+  .icon-btn {
+    width:34px; height:34px; padding:0; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--stroke); background:rgba(255,255,255,.05);
+    color:var(--text-dim); cursor:pointer; transition:.2s;
+    font-size:14px; flex-shrink:0;
+  }
+  .icon-btn:hover { color:var(--text); border-color:var(--stroke-strong);
+    transform:translateY(-1px); }
+  .icon-btn.active { color:var(--accent); border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(109,240,214,.25); }
+
+  /* ─── HEADER CHILDREN ──────────────────────────────────── */
+  #brand { display:flex; align-items:center; gap:10px; padding:0 4px 0 6px; }
+  #brand .dot { width:8px; height:8px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 12px var(--accent);
+    animation:pulse 2s infinite; flex-shrink:0; }
+  @keyframes pulse { 50% { opacity:.45; } }
+  #brand .name { font:700 12px/1 'Inter',sans-serif; letter-spacing:3px; }
+  #brand .sub  { font:500 9px/1 'Inter',sans-serif; color:var(--text-soft); letter-spacing:2px; margin-top:3px; }
+
+  #fps {
+    padding:6px 10px; border-radius:8px;
+    background:rgba(255,255,255,.04); border:1px solid var(--stroke);
+    font:600 10px/1 'JetBrains Mono',monospace;
+    letter-spacing:1.5px; color:var(--text-dim);
+  }
+  #fps .v { color:var(--accent); margin-right:4px; min-width:24px; display:inline-block; text-align:right; }
 
   #label {
-    position:fixed; top:16px; right:16px;
-    font-family:'Courier New',monospace; font-size:10px;
-    letter-spacing:3px; color:#00ffaa88;
+    padding:6px 12px; border-radius:8px;
+    background:rgba(255,255,255,.04); border:1px solid var(--stroke);
+    font:600 11px/1 'JetBrains Mono',monospace; letter-spacing:2px;
+    color:var(--text); white-space:nowrap;
   }
-  #hint {
-    position:fixed; top:16px; left:16px;
-    font-family:'Courier New',monospace; font-size:10px;
-    line-height:2.2; color:#00ffaa44;
-  }
+  #label .badge { display:inline-block; padding:3px 8px; border-radius:6px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#0a0f1f; margin-left:6px; font-weight:700; }
+  body.theme-day #label .badge { color:#fff; }
 
-  /* Formula panel */
-  #formulas {
-    position:fixed; top:0; left:0; bottom:0;
-    width:230px; padding:18px 14px 80px;
-    overflow-y:auto; pointer-events:none;
-    background:linear-gradient(to right, #040911ee 80%, transparent);
+  /* ─── BOTTOM TIME BAR ──────────────────────────────────── */
+  #timebar {
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:14px; padding:10px 18px; z-index:10;
   }
-  #formulas::-webkit-scrollbar { width:3px; }
-  #formulas::-webkit-scrollbar-thumb { background:#00ffaa33; border-radius:2px; }
+  #timebar .ctl { display:flex; align-items:center; gap:8px; }
+  #timebar label { font:500 9px/1 'Inter',sans-serif; letter-spacing:2px;
+    color:var(--text-soft); text-transform:uppercase; }
+  #timebar input[type=range] {
+    -webkit-appearance:none; appearance:none;
+    width:140px; height:4px; border-radius:4px;
+    background:linear-gradient(to right, var(--accent), var(--accent-2));
+    outline:none; cursor:pointer;
+  }
+  #timebar input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:50%;
+    background:#fff; border:2px solid var(--accent);
+    box-shadow:0 2px 8px rgba(0,0,0,.4); cursor:pointer;
+  }
+  #timebar .speed-val { font:600 10px/1 'JetBrains Mono',monospace;
+    color:var(--accent); min-width:34px; text-align:right; }
+  #timebar .divider { width:1px; height:22px; background:var(--stroke); }
 
-  .f-title {
-    font-family:'Courier New',monospace; font-size:9px;
-    letter-spacing:3px; color:#00ffaa; text-transform:uppercase;
-    margin-bottom:14px; padding-bottom:6px;
-    border-bottom:1px solid #00ffaa22;
-  }
-  .f-section {
-    margin-bottom:14px;
-  }
-  .f-section-name {
-    font-family:'Courier New',monospace; font-size:8px;
-    letter-spacing:2px; color:#00ffaa88; text-transform:uppercase;
-    margin-bottom:6px;
-  }
-  .f-row {
-    display:flex; align-items:baseline; gap:6px;
-    margin-bottom:5px; line-height:1.5;
-  }
-  .f-joint {
-    font-family:'Courier New',monospace; font-size:8px;
-    color:#00ffaa55; min-width:52px; flex-shrink:0;
-  }
-  .f-eq {
-    font-family:'Courier New',monospace; font-size:9px;
-    color:#00ffaacc; word-break:break-all;
-  }
-  .f-eq em {
-    color:#ffcc00cc; font-style:normal;
-  }
-  .f-divider {
-    height:1px; background:#00ffaa11; margin:10px 0;
-  }
-  .f-mode-block {
-    margin-bottom:4px;
-    border-left: 2px solid #00ffaa11;
-    padding-left: 8px;
-    transition: border-color .2s;
-  }
-  .f-mode-block.active {
-    border-left-color: #00ffaa;
-  }
-  .f-mode-block.active .f-title {
-    color: #00ffaa;
-  }
-  .f-mode-block:not(.active) .f-title {
-    color: #00ffaa44;
-  }
-  .f-mode-block:not(.active) .f-section-name {
-    color: #00ffaa33;
-  }
-  .f-mode-block:not(.active) .f-joint {
-    color: #00ffaa22;
-  }
-  .f-mode-block:not(.active) .f-eq {
-    color: #00ffaa44;
-  }
-  .f-mode-block:not(.active) .f-eq em {
-    color: #ffcc0044;
-  }
-  .f-mode-sep {
-    height:1px; background:#00ffaa18; margin:10px 0 12px;
-  }
-
-  /* Character selector */
+  /* ─── CHAR BAR (compact, opens grid) ───────────────────── */
   #char-bar {
-    position:fixed; top:14px; left:50%; transform:translateX(-50%);
-    display:flex; align-items:center; gap:8px;
-    padding:6px 10px; border:1px solid #00ffaa33;
-    background:#040911cc;
-    font-family:'Courier New',monospace;
-    z-index:5;
+    position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:6px; padding:6px 10px;
+    z-index:9;
   }
   #char-bar .nav {
-    width:24px; height:24px; padding:0;
-    border:1px solid #00ffaa44; background:transparent;
-    color:#00ffaa88; cursor:pointer;
-    font-family:'Courier New',monospace; font-size:11px;
-    transition:.15s;
+    appearance:none; border:1px solid var(--stroke); cursor:pointer;
+    background:transparent; color:var(--text-dim);
+    width:30px; height:30px; padding:0; border-radius:8px;
+    font-size:10px; transition:.15s;
+    display:inline-flex; align-items:center; justify-content:center;
+    line-height:1; flex-shrink:0;
   }
-  #char-bar .nav:hover { border-color:#00ffaa; color:#00ffaa; background:#00ffaa15; }
+  #char-bar .nav:hover { color:var(--accent); border-color:var(--accent); }
   #char-select, #char-select-b {
-    min-width:170px;
-    background:transparent; color:#00ffaa;
-    border:1px solid #00ffaa55;
-    font-family:'Courier New',monospace; font-size:10px;
-    letter-spacing:2px; text-transform:uppercase;
-    padding:4px 8px; cursor:pointer; outline:none;
+    min-width:140px; height:30px; padding:0 28px 0 10px; border-radius:8px;
+    background:rgba(255,255,255,.04); color:var(--text);
+    border:1px solid var(--stroke);
+    font:500 11px/1 'Inter',sans-serif; letter-spacing:1px;
+    cursor:pointer; outline:none;
+    -webkit-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23a7b6d4' stroke-width='1.4' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center;
   }
-  #char-select option, #char-select-b option { background:#040911; color:#00ffaa; }
+  #char-select option, #char-select-b option { background:#0a1224; color:var(--text); }
+  body.theme-day #char-select option { background:#fff; color:#0c1424; }
   #char-index, #char-index-b {
-    font-size:9px; letter-spacing:2px; color:#00ffaa66;
-    min-width:46px; text-align:center;
+    font:600 10px/1 'JetBrains Mono',monospace;
+    color:var(--text-soft); min-width:46px; text-align:center; letter-spacing:1px;
   }
   .char-tag {
-    font-size:9px; letter-spacing:2px; color:#00ffaa;
-    border:1px solid #00ffaa55; padding:2px 6px;
+    font:700 9px/1 'JetBrains Mono',monospace; letter-spacing:2px;
+    color:var(--accent); border:1px solid var(--accent);
+    padding:3px 6px; border-radius:6px;
   }
-  .char-sep { color:#00ffaa33; font-size:14px; margin:0 4px; }
-  .b-only { display:none; }
-  body.tennis-mode .b-only { display:inline-block; }
-  body.tennis-mode #char-bar { gap:6px; }
+  .char-tag.b { color:var(--accent-2); border-color:var(--accent-2); }
+  .char-sep { color:var(--text-soft); margin:0 2px; }
+  .b-only { display:none !important; }
+  body.tennis-mode .b-only { display:inline-flex !important; }
 
-  /* Scanline overlay */
-  #overlay {
-    position:fixed; inset:0; pointer-events:none;
-    background:repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      #00000018 2px,
-      #00000018 4px
-    );
+  #char-grid-btn {
+    margin-left:4px;
+  }
+
+  /* ─── FORMULA PANEL (collapsible, glass) ───────────────── */
+  #formulas {
+    position:fixed; top:130px; left:14px; bottom:90px;
+    width:260px; padding:18px 16px; overflow-y:auto;
+    scroll-padding-top:8px;
+    z-index:8; transition:transform .35s cubic-bezier(.4,0,.2,1), opacity .25s;
+  }
+  #formulas.collapsed { transform:translateX(-110%); opacity:0; pointer-events:none; }
+  #formulas::-webkit-scrollbar { width:4px; }
+  #formulas::-webkit-scrollbar-thumb { background:var(--stroke-strong); border-radius:2px; }
+
+  #formula-toggle {
+    position:fixed; top:80px; left:14px; z-index:9;
+    transition:transform .35s cubic-bezier(.4,0,.2,1);
+  }
+  body.formulas-collapsed #formula-toggle { transform:translateX(0); }
+
+  .f-mode-block {
+    margin-bottom:8px; padding:10px 12px; border-radius:var(--radius-sm);
+    border-left:2px solid transparent;
+    transition:.25s; opacity:.4;
+  }
+  .f-mode-block.active {
+    background:rgba(255,255,255,.05);
+    border-left-color:var(--accent);
+    opacity:1;
+  }
+  .f-title {
+    font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:2.5px;
+    color:var(--text); margin-bottom:10px; padding-bottom:6px;
+    border-bottom:1px solid var(--stroke);
+  }
+  .f-mode-block.active .f-title { color:var(--accent); }
+  .f-section { margin-bottom:10px; }
+  .f-section-name {
+    font:600 8px/1 'Inter',sans-serif; letter-spacing:2px;
+    color:var(--text-soft); text-transform:uppercase; margin-bottom:6px;
+  }
+  .f-row { display:flex; align-items:baseline; gap:6px; margin-bottom:4px; line-height:1.5; }
+  .f-joint {
+    font:500 8px/1.4 'JetBrains Mono',monospace;
+    color:var(--text-soft); min-width:54px; flex-shrink:0;
+  }
+  .f-eq {
+    font:500 9px/1.5 'JetBrains Mono',monospace;
+    color:var(--text-dim); word-break:break-all;
+  }
+  .f-eq em { color:var(--accent); font-style:normal; font-weight:700; }
+  .f-mode-sep { height:0; margin:0; }
+
+  /* ─── SETTINGS DRAWER ──────────────────────────────────── */
+  #settings {
+    position:fixed; top:0; right:0; bottom:0;
+    width:340px; padding:24px 22px; overflow-y:auto;
+    transform:translateX(110%); transition:transform .4s cubic-bezier(.4,0,.2,1);
+    z-index:20; border-radius:0;
+  }
+  #settings.open { transform:translateX(0); }
+  #settings h3 {
+    font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:3px;
+    color:var(--text); text-transform:uppercase; margin:18px 0 10px;
+    padding-bottom:6px; border-bottom:1px solid var(--stroke);
+  }
+  #settings h3:first-child { margin-top:0; }
+  #settings .row { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  #settings .row label {
+    font:500 10px/1 'Inter',sans-serif; letter-spacing:1px;
+    color:var(--text-dim); min-width:72px;
+  }
+  #settings .seg {
+    display:grid; grid-template-columns:repeat(2,1fr); gap:6px; width:100%;
+  }
+  #settings .seg button {
+    appearance:none; border:1px solid var(--stroke); cursor:pointer;
+    padding:9px; border-radius:10px; background:rgba(255,255,255,.04);
+    color:var(--text-dim);
+    font:600 10px/1 'Inter',sans-serif; letter-spacing:1px;
+    text-transform:uppercase; transition:.2s;
+  }
+  #settings .seg button:hover { color:var(--text); border-color:var(--stroke-strong); }
+  #settings .seg button.active {
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#0a0f1f; border-color:transparent;
+  }
+  body.theme-day #settings .seg button.active { color:#fff; }
+  #settings input[type=color] {
+    width:42px; height:32px; padding:0; border:1px solid var(--stroke);
+    border-radius:8px; background:transparent; cursor:pointer;
+  }
+  #settings .action {
+    width:100%; padding:11px; border:0; border-radius:10px; cursor:pointer;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2));
+    color:#0a0f1f;
+    font:700 11px/1 'Inter',sans-serif; letter-spacing:2px; text-transform:uppercase;
+    transition:.2s; box-shadow:0 4px 16px rgba(109,240,214,.25);
+  }
+  #settings .action:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(109,240,214,.4); }
+  #settings .action.danger {
+    background:linear-gradient(135deg, #ff5b6e, #ff8e3c); color:#fff;
+    box-shadow:0 4px 16px rgba(255,91,110,.3);
+  }
+  #settings .action.ghost {
+    background:transparent; color:var(--text); border:1px solid var(--stroke-strong);
+    box-shadow:none;
+  }
+  #settings .close {
+    position:absolute; top:14px; right:14px;
+    width:30px; height:30px; border-radius:50%;
+    border:1px solid var(--stroke); background:transparent; color:var(--text-dim);
+    cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;
+  }
+  #settings .close:hover { color:var(--text); }
+
+  /* ─── CHAR GRID MODAL ──────────────────────────────────── */
+  #char-modal {
+    position:fixed; inset:0; z-index:30;
+    background:rgba(0,0,0,.55); backdrop-filter:blur(8px);
+    display:none; align-items:center; justify-content:center; padding:30px;
+  }
+  #char-modal.open { display:flex; }
+  #char-modal .panel {
+    width:min(900px, 100%); max-height:80vh; padding:24px;
+    overflow:hidden; display:flex; flex-direction:column;
+  }
+  #char-modal .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  #char-modal .head h2 {
+    font:700 13px/1 'JetBrains Mono',monospace; letter-spacing:3px;
+    color:var(--text); text-transform:uppercase;
+  }
+  #char-modal input[type=search] {
+    flex:1; max-width:280px; padding:8px 12px; margin:0 12px;
+    border-radius:10px; border:1px solid var(--stroke);
+    background:rgba(255,255,255,.04); color:var(--text);
+    font:500 11px/1 'Inter',sans-serif; letter-spacing:1px; outline:none;
+  }
+  #char-modal .grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(130px,1fr));
+    gap:12px; overflow-y:auto; padding:4px;
+  }
+  .char-card {
+    border-radius:14px; padding:12px;
+    border:1px solid var(--stroke); cursor:pointer;
+    display:flex; flex-direction:column; gap:10px;
+    background:rgba(255,255,255,.03); transition:.2s; position:relative;
+    overflow:hidden;
+  }
+  .char-card:hover { transform:translateY(-2px); border-color:var(--stroke-strong); }
+  .char-card.active { border-color:var(--accent); box-shadow:0 0 0 2px rgba(109,240,214,.25); }
+  .char-card .swatch {
+    height:74px; border-radius:10px; position:relative;
+    background:linear-gradient(135deg, var(--c1), var(--c2));
+  }
+  .char-card .swatch::after {
+    content:''; position:absolute; inset:auto 8px 8px auto;
+    width:16px; height:16px; border-radius:50%; background:var(--c3);
+    box-shadow:0 0 0 2px rgba(0,0,0,.3);
+  }
+  .char-card .meta { display:flex; justify-content:space-between; align-items:baseline; gap:6px; }
+  .char-card .name { font:700 12px/1.1 'JetBrains Mono',monospace; color:var(--text); letter-spacing:1px; overflow:hidden; text-overflow:ellipsis; }
+  .char-card .num  { font:500 10px/1 'JetBrains Mono',monospace; color:var(--text-soft); }
+
+  /* ─── TOAST ────────────────────────────────────────────── */
+  #toast {
+    position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px);
+    padding:10px 18px; z-index:40;
+    font:600 11px/1 'Inter',sans-serif; letter-spacing:1px;
+    color:var(--text); pointer-events:none;
+    opacity:0; transition:.3s;
+  }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ─── REC INDICATOR ────────────────────────────────────── */
+  #rec-dot {
+    position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
+    z-index:11; padding:6px 12px; display:none; align-items:center; gap:8px;
+    font:700 10px/1 'JetBrains Mono',monospace; letter-spacing:2px; color:#ff5b6e;
+  }
+  #rec-dot.on { display:inline-flex; }
+  #rec-dot::before { content:''; width:8px; height:8px; border-radius:50%;
+    background:#ff5b6e; box-shadow:0 0 12px #ff5b6e; animation:pulse 1s infinite; }
+  /* Record button itself glows red while active */
+  #record-btn.active { color:#ff5b6e; border-color:#ff5b6e;
+    box-shadow:0 0 0 2px rgba(255,91,110,.3), 0 0 14px rgba(255,91,110,.4); }
+
+  /* ─── HOTKEYS HINT ─────────────────────────────────────── */
+  #hint {
+    position:fixed; bottom:18px; left:20px; z-index:9;
+    padding:10px 14px;
+    font:500 9px/1.8 'JetBrains Mono',monospace; letter-spacing:1px;
+    color:var(--text-soft);
+  }
+  #hint kbd { padding:1px 6px; border-radius:4px;
+    background:var(--glass-strong); border:1px solid var(--stroke);
+    color:var(--text-dim); font-family:inherit; font-size:9px; }
+  body.theme-day #hint, body.theme-day #hint kbd { color:var(--text-dim); }
+
+  /* Mobile */
+  @media (max-width: 760px) {
+    #brand .sub, #hint { display:none; }
+    #fps { left:auto; right:140px; top:auto; bottom:80px; }
+    #formulas { width:240px; top:140px; }
+    #topbar { flex-wrap:wrap; max-width:96vw; justify-content:center; }
+    #char-bar { top:auto; bottom:75px; }
+    #timebar { display:none; }
   }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="overlay"></div>
-<div id="controls">
-  <button class="btn active" data-anim="idle">IDLE</button>
-  <button class="btn" data-anim="walk">WALK</button>
-  <button class="btn" data-anim="wave">WAVE</button>
-  <button class="btn" data-anim="dance">DANCE</button>
-  <button class="btn" data-anim="run">RUN</button>
-  <button class="btn" data-anim="break">BREAK</button>
-  <button class="btn" data-anim="tennis">TENNIS</button>
-</div>
-<div id="char-bar">
+
+<!-- Top header: full-width app bar -->
+<header id="topbar" class="glass">
+  <div class="t-left">
+    <div id="brand">
+      <span class="dot"></span>
+      <div>
+        <div class="name">3D HUMAN</div>
+        <div class="sub">REAL-TIME</div>
+      </div>
+    </div>
+    <div id="fps"><span class="v">--</span>FPS</div>
+  </div>
+  <div class="t-center">
+    <div class="pill-group" data-group="movement">
+      <button class="btn active" data-anim="idle">Idle</button>
+      <button class="btn" data-anim="walk">Walk</button>
+      <button class="btn" data-anim="run">Run</button>
+    </div>
+    <div class="pill-group" data-group="expression">
+      <button class="btn" data-anim="wave">Wave</button>
+      <button class="btn" data-anim="dance">Dance</button>
+      <button class="btn" data-anim="break">Break</button>
+    </div>
+    <div class="pill-group" data-group="sport">
+      <button class="btn" data-anim="tennis">Tennis</button>
+    </div>
+  </div>
+  <div class="t-right">
+    <div id="label">MODE<span class="badge" id="mode-badge">IDLE</span></div>
+    <button id="settings-btn" class="icon-btn" title="Settings (G)" aria-label="Settings">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="1.7"/><path d="M7 .8v2.2M7 11v2.2M11.4 2.6l-1.5 1.5M4.1 9.9l-1.5 1.5M13.2 7H11M3 7H.8M11.4 11.4l-1.5-1.5M4.1 4.1L2.6 2.6"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- Character bar -->
+<div id="char-bar" class="glass">
   <span class="char-tag">A</span>
   <button class="nav" id="char-prev">◀</button>
   <select id="char-select"></select>
   <button class="nav" id="char-next">▶</button>
   <span id="char-index">01/50</span>
   <span class="char-sep b-only">|</span>
-  <span class="char-tag b-only">B</span>
+  <span class="char-tag b b-only">B</span>
   <button class="nav b-only" id="char-prev-b">◀</button>
   <select id="char-select-b" class="b-only"></select>
   <button class="nav b-only" id="char-next-b">▶</button>
   <span id="char-index-b" class="b-only">02/50</span>
+  <button id="char-grid-btn" class="nav" title="Browse all (C)" aria-label="Browse">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="0" y="0" width="3.4" height="3.4" rx=".4"/><rect x="4.3" y="0" width="3.4" height="3.4" rx=".4"/><rect x="8.6" y="0" width="3.4" height="3.4" rx=".4"/><rect x="0" y="4.3" width="3.4" height="3.4" rx=".4"/><rect x="4.3" y="4.3" width="3.4" height="3.4" rx=".4"/><rect x="8.6" y="4.3" width="3.4" height="3.4" rx=".4"/><rect x="0" y="8.6" width="3.4" height="3.4" rx=".4"/><rect x="4.3" y="8.6" width="3.4" height="3.4" rx=".4"/><rect x="8.6" y="8.6" width="3.4" height="3.4" rx=".4"/></svg>
+  </button>
 </div>
-<div id="label">MODE: IDLE</div>
-<div id="hint" style="top:auto;bottom:70px;font-size:9px;">DRAG旋轉 · SCROLL縮放 · 1-7模式 · SPACE暫停 · S慢動作 · ←→換角色</div>
-<div id="formulas"></div>
+
+<!-- Formula panel + collapse toggle -->
+<div id="formulas" class="glass"></div>
+<button id="formula-toggle" class="icon-btn" title="Toggle formulas (F)">𝑓</button>
+
+<!-- Bottom time bar -->
+<div id="timebar" class="glass">
+  <div class="ctl">
+    <button id="play-btn" class="icon-btn" title="Pause/Play (Space)" aria-label="Pause">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="3" y="2.5" width="2.6" height="9" rx=".4"/><rect x="8.4" y="2.5" width="2.6" height="9" rx=".4"/></svg>
+    </button>
+    <button id="step-btn" class="icon-btn" title="Step frame (.)" aria-label="Step">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M2 2.5l6 4.5-6 4.5z"/><rect x="9" y="2.5" width="2.2" height="9" rx=".4"/></svg>
+    </button>
+  </div>
+  <div class="divider"></div>
+  <div class="ctl">
+    <label>SPEED</label>
+    <input id="speed" type="range" min="0.05" max="2" step="0.05" value="1">
+    <span class="speed-val" id="speed-val">1.00x</span>
+  </div>
+  <div class="divider"></div>
+  <div class="ctl">
+    <button id="reset-cam-btn" class="icon-btn" title="Reset camera (R)" aria-label="Reset camera">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4"/><path d="M7 1.5v2M7 10.5v2M1.5 7h2M10.5 7h2"/><circle cx="7" cy="7" r=".7" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button id="screenshot-btn" class="icon-btn" title="Screenshot (P)" aria-label="Screenshot">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M2 4h2l1-1.5h4L10 4h2v7H2z"/><circle cx="7" cy="7.5" r="2.2"/></svg>
+    </button>
+    <button id="record-btn" class="icon-btn" title="Record video (V)" aria-label="Record">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="3.6"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Settings drawer -->
+<div id="settings" class="glass">
+  <button class="close" id="settings-close" aria-label="Close">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+  </button>
+  <h3>Environment</h3>
+  <div class="row"><div class="seg" id="env-seg">
+    <button data-env="night" class="active">Cyber Night</button>
+    <button data-env="day">Daylight</button>
+    <button data-env="sunset">Sunset</button>
+    <button data-env="arena">Arena</button>
+  </div></div>
+
+  <h3>Character Colors (A)</h3>
+  <div class="row"><label>Skin</label>  <input type="color" id="col-skin">  </div>
+  <div class="row"><label>Hair</label>  <input type="color" id="col-hair">  </div>
+  <div class="row"><label>Shirt</label> <input type="color" id="col-shirt"> </div>
+  <div class="row"><label>Pants</label> <input type="color" id="col-pants"> </div>
+  <div class="row"><label>Accent</label><input type="color" id="col-panel"> </div>
+  <button class="action ghost" id="col-reset">Reset to Original</button>
+
+  <h3>Render</h3>
+  <div class="row"><label>Floor</label><div class="seg" id="floor-seg">
+    <button data-floor="grid" class="active">Grid</button>
+    <button data-floor="mirror">Mirror</button>
+    <button data-floor="matte">Matte</button>
+    <button data-floor="hide">Hide</button>
+  </div></div>
+  <div class="row"><label>FOV</label>
+    <input type="range" id="fov" min="30" max="80" step="1" value="52" style="flex:1;">
+    <span class="speed-val" id="fov-val">52°</span>
+  </div>
+  <div class="row"><label>Bloom</label>
+    <input type="range" id="bloom" min="0" max="1.5" step="0.05" value="0" style="flex:1;">
+    <span class="speed-val" id="bloom-val">0.00</span>
+  </div>
+
+  <h3>Capture</h3>
+  <button class="action" id="settings-screenshot">📸 Screenshot PNG</button>
+  <div style="height:8px;"></div>
+  <button class="action danger" id="settings-record">⏺ Start Recording</button>
+
+  <h3>Hotkeys</h3>
+  <div style="font:500 10px/1.9 'JetBrains Mono',monospace;color:var(--text-soft);letter-spacing:.5px;">
+    <kbd>1-7</kbd> mode &nbsp; <kbd>←→</kbd> char<br>
+    <kbd>WASD</kbd> orbit/zoom &nbsp; <kbd>QE</kbd> tilt<br>
+    <kbd>Space</kbd> pause &nbsp; <kbd>.</kbd> step<br>
+    <kbd>F</kbd> formulas &nbsp; <kbd>G</kbd> settings<br>
+    <kbd>C</kbd> char grid &nbsp; <kbd>P</kbd> screenshot<br>
+    <kbd>V</kbd> record &nbsp; <kbd>R</kbd> reset cam
+  </div>
+  <div style="height:14px;"></div>
+  <a href="info.html" class="action ghost" style="display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="5.3"/><path d="M7 6.2v3.4M7 4.2v.1"/></svg>
+    Tech Stack
+  </a>
+</div>
+
+<!-- Char grid modal -->
+<div id="char-modal">
+  <div class="panel glass">
+    <div class="head">
+      <h2>Choose Avatar</h2>
+      <input type="search" id="char-search" placeholder="Search by name…">
+      <button class="icon-btn" id="char-modal-close" aria-label="Close">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+      </button>
+    </div>
+    <div class="grid" id="char-grid"></div>
+  </div>
+</div>
+
+<!-- Misc -->
+<div id="rec-dot" class="glass">REC</div>
+<div id="toast" class="glass">Saved</div>
+<div id="hint">
+  <kbd>1-7</kbd> mode · <kbd>WASD/QE</kbd> camera · <kbd>←→</kbd> char · <kbd>Space</kbd> pause · <kbd>F/G/C</kbd> panels
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 <script>
 // ─── RENDERER ───────────────────────────────────────────────
 const canvas = document.getElementById('c');
@@ -232,7 +629,8 @@ const floorMesh = new THREE.Mesh(
 floorMesh.rotation.x = -Math.PI / 2;
 floorMesh.receiveShadow = true;
 scene.add(floorMesh);
-scene.add(new THREE.GridHelper(18, 36, 0x0a2030, 0x060e18));
+const gridHelper = new THREE.GridHelper(18, 36, 0x0a2030, 0x060e18);
+scene.add(gridHelper);
 
 // ─── MATERIAL HELPERS ───────────────────────────────────────
 const mkMat = (c, s=60, e=0) => new THREE.MeshPhongMaterial({ color:c, shininess:s, emissive:e });
@@ -918,11 +1316,12 @@ function renderFormulas(activeKey) {
 }
 
 function refreshModeLabel() {
+  const badge = document.getElementById('mode-badge');
   const tag =
-    paused                ? ' · PAUSED'
-    : (timeScale !== 1)   ? ' · SLOW '+timeScale.toFixed(2)+'x'
-    :                       '';
-  labelEl.textContent = 'MODE: '+mode.toUpperCase() + tag;
+    paused                ? 'PAUSED'
+    : (timeScale !== 1)   ? mode.toUpperCase() + ' · ' + timeScale.toFixed(2) + 'x'
+    :                       mode.toUpperCase();
+  if (badge) badge.textContent = tag;
 }
 
 document.querySelectorAll('.btn').forEach(btn => {
@@ -1003,11 +1402,7 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     return;
   }
-  if (e.key === 's' || e.key === 'S') {
-    timeScale = (timeScale === 1) ? 0.30 : 1;
-    refreshModeLabel();
-    return;
-  }
+  // (S slow-mo removed — speed slider in timebar replaces it; S now drives camera)
 });
 
 // Player B selector — only visible in tennis mode
@@ -2984,10 +3379,517 @@ function loop(ts) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    if (typeof composer !== 'undefined' && composer) {
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(w, h);
+    }
   }
 
-  renderer.render(scene, camera);
+  if (typeof composer !== 'undefined' && composer && bloomPass && bloomPass.strength > 0.001) {
+    composer.render();
+  } else {
+    renderer.render(scene, camera);
+  }
 }
+
+// ════════════════════════════════════════════════════════════
+// ─── UTIL HELPERS (shared) ──────────────────────────────────
+// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// ─── FPS COUNTER ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const fpsValEl = document.querySelector('#fps .v');
+let _fpsFrames = 0, _fpsLast = performance.now(), _fpsEMA = 60;
+function fpsTick() {
+  _fpsFrames++;
+  const now = performance.now();
+  if (now - _fpsLast >= 500) {
+    const fps = (_fpsFrames * 1000) / (now - _fpsLast);
+    _fpsEMA = _fpsEMA * 0.6 + fps * 0.4;
+    fpsValEl.textContent = Math.round(_fpsEMA);
+    _fpsFrames = 0; _fpsLast = now;
+  }
+  requestAnimationFrame(fpsTick);
+}
+requestAnimationFrame(fpsTick);
+
+// ════════════════════════════════════════════════════════════
+// ─── TOAST ──────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const toastEl = document.getElementById('toast');
+let _toastTimer = null;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1800);
+}
+
+// ════════════════════════════════════════════════════════════
+// ─── ENVIRONMENT PRESETS ────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const ENVS = {
+  night: {
+    bg: 0x040911, fog: [0x040911, 0.055],
+    sun: { color: 0xffffff, intensity: 1.1 },
+    amb: { color: 0x182840, intensity: 2.5 },
+    cyan: 1.5, blue: 0.8,
+  },
+  day: {
+    bg: 0xb9c8e8, fog: [0xc8d6f0, 0.022],
+    sun: { color: 0xffffff, intensity: 1.6 },
+    amb: { color: 0xb8c8e8, intensity: 2.2 },
+    cyan: 0.4, blue: 0.4,
+  },
+  sunset: {
+    bg: 0x2a1530, fog: [0x4a2030, 0.04],
+    sun: { color: 0xffaa66, intensity: 1.4 },
+    amb: { color: 0x602840, intensity: 2.2 },
+    cyan: 0.6, blue: 1.4,
+  },
+  arena: {
+    bg: 0x0c1a2c, fog: [0x1d3556, 0.038],
+    sun: { color: 0xffffff, intensity: 1.5 },
+    amb: { color: 0x506080, intensity: 2.4 },
+    cyan: 1.2, blue: 1.2,
+  },
+};
+const ambient = scene.children.find(o => o.isAmbientLight);
+function applyEnv(name) {
+  const e = ENVS[name]; if (!e) return;
+  scene.background = new THREE.Color(e.bg);
+  scene.fog = new THREE.FogExp2(e.fog[0], e.fog[1]);
+  sun.color.setHex(e.sun.color); sun.intensity = e.sun.intensity;
+  ambient.color.setHex(e.amb.color); ambient.intensity = e.amb.intensity;
+  cyanLight.intensity = e.cyan; blueLight.intensity = e.blue;
+  document.body.classList.remove('theme-day','theme-sunset','theme-arena','theme-night');
+  document.body.classList.add('theme-' + name);
+  document.querySelectorAll('#env-seg button').forEach(b =>
+    b.classList.toggle('active', b.dataset.env === name));
+}
+document.querySelectorAll('#env-seg button').forEach(b =>
+  b.addEventListener('click', () => applyEnv(b.dataset.env)));
+
+// ════════════════════════════════════════════════════════════
+// ─── FLOOR MODES ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function applyFloor(mode) {
+  switch (mode) {
+    case 'grid':
+      floorMesh.visible = true; gridHelper.visible = true;
+      floorMesh.material.color.setHex(0x060d1a);
+      floorMesh.material.shininess = 15;
+      break;
+    case 'mirror':
+      floorMesh.visible = true; gridHelper.visible = false;
+      floorMesh.material.color.setHex(0x0a1428);
+      floorMesh.material.shininess = 280;
+      break;
+    case 'matte':
+      floorMesh.visible = true; gridHelper.visible = false;
+      floorMesh.material.color.setHex(0x1a2032);
+      floorMesh.material.shininess = 4;
+      break;
+    case 'hide':
+      floorMesh.visible = false; gridHelper.visible = false;
+      break;
+  }
+  floorMesh.material.needsUpdate = true;
+  document.querySelectorAll('#floor-seg button').forEach(b =>
+    b.classList.toggle('active', b.dataset.floor === mode));
+}
+document.querySelectorAll('#floor-seg button').forEach(b =>
+  b.addEventListener('click', () => applyFloor(b.dataset.floor)));
+
+// ════════════════════════════════════════════════════════════
+// ─── COLOR CUSTOMIZER ───────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const _origCfg = CHARACTERS.map(c => ({ ...c }));
+const colInputs = {
+  skin:  document.getElementById('col-skin'),
+  hair:  document.getElementById('col-hair'),
+  shirt: document.getElementById('col-shirt'),
+  pants: document.getElementById('col-pants'),
+  panel: document.getElementById('col-panel'),
+};
+const hex = n => '#' + n.toString(16).padStart(6, '0');
+function syncColInputs() {
+  const c = CHARACTERS[currentChar];
+  colInputs.skin.value  = hex(c.skin);
+  colInputs.hair.value  = hex(c.hair);
+  colInputs.shirt.value = hex(c.shirt);
+  colInputs.pants.value = hex(c.pants);
+  colInputs.panel.value = hex(c.panel);
+}
+let _colorTimer = null;
+Object.entries(colInputs).forEach(([k, el]) => {
+  el.addEventListener('input', () => {
+    CHARACTERS[currentChar][k] = parseInt(el.value.slice(1), 16);
+    if (k === 'panel') CHARACTERS[currentChar].joint = CHARACTERS[currentChar].panel;
+    clearTimeout(_colorTimer);
+    _colorTimer = setTimeout(() => pickCharacter(currentChar), 80);
+  });
+});
+document.getElementById('col-reset').addEventListener('click', () => {
+  CHARACTERS[currentChar] = { ..._origCfg[currentChar] };
+  pickCharacter(currentChar);
+  syncColInputs();
+  toast('Colors reset');
+});
+
+// hook char change to refresh color inputs / grid highlight
+const _origPick = pickCharacter;
+pickCharacter = function(idx) { _origPick(idx); syncColInputs(); refreshCharGridActive(); };
+// (existing addEventListener handlers look up pickCharacter at call time → use the new one)
+syncColInputs();
+
+// ════════════════════════════════════════════════════════════
+// ─── FOV CONTROL ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const fovSlider = document.getElementById('fov');
+const fovVal = document.getElementById('fov-val');
+fovSlider.addEventListener('input', () => {
+  camera.fov = parseFloat(fovSlider.value);
+  camera.updateProjectionMatrix();
+  fovVal.textContent = fovSlider.value + '°';
+});
+
+// ════════════════════════════════════════════════════════════
+// ─── TIME BAR (play/pause/step/speed) ───────────────────────
+// ════════════════════════════════════════════════════════════
+const playBtn = document.getElementById('play-btn');
+const stepBtn = document.getElementById('step-btn');
+const speedSlider = document.getElementById('speed');
+const speedVal = document.getElementById('speed-val');
+const _SVG_PAUSE = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="3" y="2.5" width="2.6" height="9" rx=".4"/><rect x="8.4" y="2.5" width="2.6" height="9" rx=".4"/></svg>';
+const _SVG_PLAY  = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3.5 2.5L11.5 7 3.5 11.5z"/></svg>';
+function syncPlayBtn() { playBtn.innerHTML = paused ? _SVG_PLAY : _SVG_PAUSE; }
+playBtn.addEventListener('click', () => {
+  paused = !paused; refreshModeLabel(); syncPlayBtn();
+});
+stepBtn.addEventListener('click', () => {
+  if (!paused) { paused = true; syncPlayBtn(); }
+  animClock += 1 / 60;
+});
+speedSlider.addEventListener('input', () => {
+  timeScale = parseFloat(speedSlider.value);
+  speedVal.textContent = timeScale.toFixed(2) + 'x';
+  refreshModeLabel();
+});
+
+// ════════════════════════════════════════════════════════════
+// ─── CAMERA RESET ───────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+document.getElementById('reset-cam-btn').addEventListener('click', () => {
+  if (mode === 'tennis') { camR = 11; camPhi = 0.46; camTheta = 0.20; }
+  else { camR = 7; camPhi = 0.32; camTheta = 0.2; }
+  camera.fov = 52; camera.updateProjectionMatrix();
+  fovSlider.value = 52; fovVal.textContent = '52°';
+  toast('Camera reset');
+});
+
+// ════════════════════════════════════════════════════════════
+// ─── SCREENSHOT ─────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+function screenshot() {
+  // force a fresh render so we capture the latest frame
+  renderer.render(scene, camera);
+  renderer.domElement.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `3dhuman-${Date.now()}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Screenshot saved');
+  }, 'image/png');
+}
+document.getElementById('screenshot-btn').addEventListener('click', screenshot);
+document.getElementById('settings-screenshot').addEventListener('click', screenshot);
+
+// ════════════════════════════════════════════════════════════
+// ─── VIDEO RECORDER ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const recDot = document.getElementById('rec-dot');
+const recBtn = document.getElementById('record-btn');
+const recBtnSettings = document.getElementById('settings-record');
+let _recorder = null, _recChunks = [];
+function toggleRecord() {
+  if (_recorder && _recorder.state !== 'inactive') {
+    _recorder.stop(); return;
+  }
+  if (!('MediaRecorder' in window)) { toast('MediaRecorder not supported'); return; }
+  const stream = canvas.captureStream(60);
+  const mime = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']
+    .find(m => MediaRecorder.isTypeSupported(m));
+  if (!mime) { toast('No webm support'); return; }
+  _recChunks = [];
+  _recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  _recorder.ondataavailable = e => { if (e.data.size) _recChunks.push(e.data); };
+  _recorder.onstop = () => {
+    const blob = new Blob(_recChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `3dhuman-${Date.now()}.webm`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    recDot.classList.remove('on');
+    recBtn.classList.remove('active');
+    recBtnSettings.textContent = '⏺ Start Recording';
+    toast('Recording saved');
+  };
+  _recorder.start();
+  recDot.classList.add('on');
+  recBtn.classList.add('active');
+  recBtnSettings.textContent = '⏹ Stop Recording';
+  toast('Recording…');
+}
+recBtn.addEventListener('click', toggleRecord);
+recBtnSettings.addEventListener('click', toggleRecord);
+
+// ════════════════════════════════════════════════════════════
+// ─── SETTINGS DRAWER ────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const settingsEl = document.getElementById('settings');
+document.getElementById('settings-btn').addEventListener('click', () => settingsEl.classList.toggle('open'));
+document.getElementById('settings-close').addEventListener('click', () => settingsEl.classList.remove('open'));
+
+// ════════════════════════════════════════════════════════════
+// ─── FORMULA TOGGLE ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const formulaPanel = document.getElementById('formulas');
+const formulaBtn = document.getElementById('formula-toggle');
+function toggleFormulas() {
+  const collapsed = formulaPanel.classList.toggle('collapsed');
+  document.body.classList.toggle('formulas-collapsed', collapsed);
+  formulaBtn.classList.toggle('active', !collapsed);
+}
+formulaBtn.classList.add('active');
+formulaBtn.addEventListener('click', toggleFormulas);
+
+// ════════════════════════════════════════════════════════════
+// ─── CHAR GRID MODAL ────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+const charModal = document.getElementById('char-modal');
+const charGrid = document.getElementById('char-grid');
+const charSearch = document.getElementById('char-search');
+
+function buildCharGrid() {
+  charGrid.innerHTML = '';
+  CHARACTERS.forEach((c, i) => {
+    const card = document.createElement('div');
+    card.className = 'char-card' + (i === currentChar ? ' active' : '');
+    card.dataset.idx = i;
+    card.dataset.name = c.name;
+    card.style.setProperty('--c1', hex(c.shirt));
+    card.style.setProperty('--c2', hex(c.pants));
+    card.style.setProperty('--c3', hex(c.panel));
+    card.innerHTML = `
+      <div class="swatch"></div>
+      <div class="meta">
+        <span class="name">${c.name}</span>
+        <span class="num">${String(i+1).padStart(2,'0')}</span>
+      </div>`;
+    card.addEventListener('click', () => {
+      pickCharacter(i);
+      charModal.classList.remove('open');
+    });
+    charGrid.appendChild(card);
+  });
+}
+function refreshCharGridActive() {
+  charGrid.querySelectorAll('.char-card').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.idx, 10) === currentChar);
+  });
+}
+charSearch.addEventListener('input', () => {
+  const q = charSearch.value.trim().toUpperCase();
+  charGrid.querySelectorAll('.char-card').forEach(el => {
+    el.style.display = (!q || el.dataset.name.includes(q)) ? '' : 'none';
+  });
+});
+document.getElementById('char-grid-btn').addEventListener('click', () => {
+  charModal.classList.add('open'); charSearch.focus();
+});
+document.getElementById('char-modal-close').addEventListener('click', () => charModal.classList.remove('open'));
+charModal.addEventListener('click', e => { if (e.target === charModal) charModal.classList.remove('open'); });
+buildCharGrid();
+
+// ════════════════════════════════════════════════════════════
+// ─── EXTRA HOTKEYS (F/G/C/P/V/R/.) ──────────────────────────
+// ════════════════════════════════════════════════════════════
+window.addEventListener('keydown', e => {
+  const tag = (e.target && e.target.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  const k = e.key.toLowerCase();
+  // preventDefault before opening modal/focusing input, otherwise the same
+  // keystroke types the letter into the now-focused field.
+  if ('fgcpvr.'.includes(k)) e.preventDefault();
+  switch (k) {
+    case 'f': toggleFormulas(); break;
+    case 'g': settingsEl.classList.toggle('open'); break;
+    case 'c':
+      charModal.classList.toggle('open');
+      if (charModal.classList.contains('open')) {
+        charSearch.value = '';
+        charSearch.dispatchEvent(new Event('input'));
+        setTimeout(() => charSearch.focus(), 30);
+      }
+      break;
+    case 'p': screenshot(); break;
+    case 'v': toggleRecord(); break;
+    case 'r': document.getElementById('reset-cam-btn').click(); break;
+    case '.': stepBtn.click(); break;
+  }
+  if (e.key === 'Escape') {
+    settingsEl.classList.remove('open');
+    charModal.classList.remove('open');
+  }
+  // sync play btn after Space toggle from original handler
+  if (e.code === 'Space') syncPlayBtn();
+});
+
+// ════════════════════════════════════════════════════════════
+// ─── WASD / QE CAMERA INPUT ─────────────────────────────────
+// W/S dolly in-out · A/D orbit horizontal · Q/E tilt vertical
+// ════════════════════════════════════════════════════════════
+const camKeys = { w:0, a:0, s:0, d:0, q:0, e:0 };
+window.addEventListener('keydown', e => {
+  const tag = (e.target && e.target.tagName || '').toUpperCase();
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  const k = e.key.toLowerCase();
+  if (k in camKeys) { camKeys[k] = 1; e.preventDefault(); }
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k in camKeys) camKeys[k] = 0;
+});
+let _camTickPrev = performance.now();
+function camInputTick(now) {
+  requestAnimationFrame(camInputTick);
+  const dt = Math.min(0.05, (now - _camTickPrev) * 0.001);
+  _camTickPrev = now;
+  const ORBIT = 1.6, ZOOM = 7.0, TILT = 1.0;
+  if (camKeys.a) camTheta -= ORBIT * dt;
+  if (camKeys.d) camTheta += ORBIT * dt;
+  if (camKeys.w) camR     -= ZOOM  * dt;
+  if (camKeys.s) camR     += ZOOM  * dt;
+  if (camKeys.q) camPhi   -= TILT  * dt;
+  if (camKeys.e) camPhi   += TILT  * dt;
+  camR   = Math.max(3,    Math.min(14,   camR));
+  camPhi = Math.max(0.06, Math.min(1.25, camPhi));
+}
+requestAnimationFrame(camInputTick);
+
+// ════════════════════════════════════════════════════════════
+// ─── BLOOM POSTPROCESSING ───────────────────────────────────
+// ════════════════════════════════════════════════════════════
+let composer = null, bloomPass = null;
+if (THREE.EffectComposer && THREE.UnrealBloomPass) {
+  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  composer = new THREE.EffectComposer(renderer);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(w, h);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0.0, 0.85, 0.6);
+  composer.addPass(bloomPass);
+}
+const bloomSlider = document.getElementById('bloom');
+const bloomValEl  = document.getElementById('bloom-val');
+bloomSlider.addEventListener('input', () => {
+  const v = parseFloat(bloomSlider.value);
+  if (bloomPass) bloomPass.strength = v;
+  bloomValEl.textContent = v.toFixed(2);
+});
+
+// ════════════════════════════════════════════════════════════
+// ─── LOCALSTORAGE PERSISTENCE ───────────────────────────────
+// ════════════════════════════════════════════════════════════
+const STORE = '3dhuman.settings.v1';
+function getColorOverrides() {
+  const m = {};
+  CHARACTERS.forEach((c, i) => {
+    const o = _origCfg[i]; const diff = {};
+    ['skin','hair','shirt','pants','panel','joint'].forEach(k => {
+      if (c[k] !== o[k]) diff[k] = c[k];
+    });
+    if (Object.keys(diff).length) m[i] = diff;
+  });
+  return m;
+}
+function saveSettings() {
+  const s = {
+    env:    document.querySelector('#env-seg button.active')?.dataset.env || 'night',
+    floor:  document.querySelector('#floor-seg button.active')?.dataset.floor || 'grid',
+    fov:    camera.fov,
+    speed:  timeScale,
+    mode:   mode,
+    charA:  currentChar,
+    charB:  currentCharB,
+    fmCol:  formulaPanel.classList.contains('collapsed'),
+    bloom:  bloomPass ? bloomPass.strength : 0,
+    colors: getColorOverrides(),
+  };
+  try { localStorage.setItem(STORE, JSON.stringify(s)); } catch(e) {}
+}
+function loadSettings() {
+  try { const r = localStorage.getItem(STORE); return r ? JSON.parse(r) : null; }
+  catch(e) { return null; }
+}
+const _saved = loadSettings();
+if (_saved) {
+  // 1. apply color overrides BEFORE rebuilding char so first paint is correct
+  if (_saved.colors) Object.entries(_saved.colors).forEach(([idx, ovr]) => {
+    Object.assign(CHARACTERS[idx], ovr);
+  });
+  // 2. char A / B
+  if (typeof _saved.charA === 'number') pickCharacter(_saved.charA);
+  if (typeof _saved.charB === 'number') currentCharB = _saved.charB;
+  // 3. visual settings
+  if (_saved.env)   applyEnv(_saved.env);
+  if (_saved.floor) applyFloor(_saved.floor);
+  if (_saved.fov)   {
+    camera.fov = _saved.fov; camera.updateProjectionMatrix();
+    fovSlider.value = _saved.fov; fovVal.textContent = Math.round(_saved.fov) + '°';
+  }
+  if (typeof _saved.speed === 'number' && _saved.speed > 0) {
+    timeScale = _saved.speed;
+    speedSlider.value = _saved.speed;
+    speedVal.textContent = _saved.speed.toFixed(2) + 'x';
+  }
+  if (_saved.fmCol) toggleFormulas();
+  if (_saved.bloom != null && bloomPass) {
+    bloomPass.strength = _saved.bloom;
+    bloomSlider.value = _saved.bloom;
+    bloomValEl.textContent = _saved.bloom.toFixed(2);
+  }
+  // 4. mode (apply last so tennis enter/exit + camera framing fire after chars exist)
+  if (_saved.mode && _saved.mode !== 'idle') {
+    document.querySelector(`[data-anim="${_saved.mode}"]`)?.click();
+  }
+}
+
+// hook saves to all controls (debounced for sliders)
+let _saveTimer = null;
+const _scheduleSave = () => { clearTimeout(_saveTimer); _saveTimer = setTimeout(saveSettings, 150); };
+document.querySelectorAll('#env-seg button, #floor-seg button').forEach(b => b.addEventListener('click', saveSettings));
+document.querySelectorAll('button[data-anim]').forEach(b => b.addEventListener('click', saveSettings));
+fovSlider.addEventListener('input', _scheduleSave);
+speedSlider.addEventListener('input', _scheduleSave);
+bloomSlider.addEventListener('input', _scheduleSave);
+formulaBtn.addEventListener('click', _scheduleSave);
+Object.values(colInputs).forEach(el => el.addEventListener('input', _scheduleSave));
+document.getElementById('col-reset').addEventListener('click', _scheduleSave);
+// pickCharacter wrapper save
+const _pickWithSave = pickCharacter;
+pickCharacter = function(idx) { _pickWithSave(idx); _scheduleSave(); };
+const _pickBOrig = pickCharacterB;
+pickCharacterB = function(idx) { _pickBOrig(idx); _scheduleSave(); };
+// Space + S keys mutate timeScale/paused without an input event — save on keyup
+window.addEventListener('keyup', e => { if (e.code === 'Space') _scheduleSave(); });
+
+// init labels
+refreshModeLabel();
+syncPlayBtn();
 
 loop(0);
 </script>
