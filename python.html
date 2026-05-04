@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python 入門教學</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#ffffff;
+    --text:#1a1a1a;
+    --text-soft:#4a4a4a;
+    --text-faded:#8a8a8a;
+    --line:#e6e6e6;
+    --line-strong:#cfcfcf;
+    --accent:#0a66c2;
+    --code-bg:#f6f7f9;
+    --warn-bg:#fff8e6;
+    --warn-border:#e6b800;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:var(--bg); }
+  body {
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans TC',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    font-size:16px;
+    line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection { background:var(--accent); color:#fff; }
+
+  .page { max-width:720px; margin:0 auto; padding:64px 24px 96px; }
+
+  h1 {
+    font-size:32px; font-weight:700; line-height:1.3;
+    margin-bottom:12px; letter-spacing:-.5px;
+  }
+  .lead {
+    color:var(--text-soft); font-size:17px;
+    margin-bottom:8px;
+  }
+  .meta {
+    color:var(--text-faded); font-size:14px;
+    margin-bottom:48px;
+    padding-bottom:24px;
+    border-bottom:1px solid var(--line);
+  }
+
+  h2 {
+    font-size:22px; font-weight:700;
+    margin:48px 0 16px;
+    padding-top:8px;
+  }
+  h2 .num {
+    color:var(--text-faded); font-weight:500;
+    margin-right:10px;
+  }
+
+  p { margin:12px 0; }
+  p strong { font-weight:700; }
+
+  ol, ul { margin:12px 0 12px 24px; }
+  li { margin:6px 0; padding-left:4px; }
+
+  a {
+    color:var(--accent); text-decoration:none;
+    border-bottom:1px solid var(--line-strong);
+    transition:border-color .15s;
+  }
+  a:hover { border-bottom-color:var(--accent); }
+
+  code {
+    font:600 .9em/1 'JetBrains Mono', monospace;
+    background:var(--code-bg);
+    padding:2px 6px; border-radius:4px;
+    color:var(--text);
+  }
+
+  .code {
+    margin:14px 0;
+    background:var(--code-bg);
+    border:1px solid var(--line);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .code .head {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 14px;
+    border-bottom:1px solid var(--line);
+    font:600 11px/1 'JetBrains Mono', monospace;
+    color:var(--text-faded);
+    letter-spacing:.5px;
+  }
+  .code pre {
+    padding:14px 16px;
+    font:14px/1.7 'JetBrains Mono', monospace;
+    color:var(--text);
+    overflow-x:auto;
+    background:var(--code-bg);
+  }
+  .code .copy {
+    background:transparent; border:1px solid var(--line-strong);
+    color:var(--text-soft); cursor:pointer;
+    padding:3px 10px; border-radius:4px;
+    font:600 11px/1 'JetBrains Mono', monospace;
+    transition:all .15s;
+  }
+  .code .copy:hover { color:var(--accent); border-color:var(--accent); }
+  .code .copy.ok { color:#0a8f3f; border-color:#0a8f3f; }
+
+  .tip {
+    margin:18px 0;
+    padding:14px 18px;
+    background:var(--warn-bg);
+    border-left:3px solid var(--warn-border);
+    border-radius:4px;
+    font-size:15px;
+  }
+  .tip b { display:block; margin-bottom:4px; }
+
+  .faq summary {
+    cursor:pointer; font-weight:500;
+    padding:12px 0;
+    border-top:1px solid var(--line);
+    list-style:none;
+    position:relative; padding-right:24px;
+  }
+  .faq summary::-webkit-details-marker { display:none; }
+  .faq summary::after {
+    content:'+'; position:absolute; right:0; top:12px;
+    color:var(--text-faded); font:400 18px/1 'JetBrains Mono', monospace;
+  }
+  .faq details[open] summary::after { content:'−'; }
+  .faq details:last-of-type { border-bottom:1px solid var(--line); }
+  .faq details[open] { padding-bottom:12px; }
+  .faq details p {
+    margin:4px 0 8px; color:var(--text-soft); font-size:15px;
+  }
+
+  .resources {
+    margin-top:14px;
+    border-top:1px solid var(--line);
+  }
+  .resources a {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+    color:var(--text); border-left:none; border-right:none; border-top:none;
+    transition:padding .15s;
+  }
+  .resources a:hover { padding-left:6px; color:var(--accent); border-bottom-color:var(--line); }
+  .resources a .arrow { color:var(--text-faded); font-family:'JetBrains Mono', monospace; }
+  .resources a:hover .arrow { color:var(--accent); }
+
+  /* SVG figure */
+  figure {
+    margin:18px 0;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#fafbfc;
+    overflow:hidden;
+  }
+  figure svg { display:block; width:100%; height:auto; }
+  figure figcaption {
+    padding:8px 14px;
+    border-top:1px solid var(--line);
+    font-size:13px; color:var(--text-faded);
+    background:#fff;
+  }
+  figure figcaption b { color:#d33; font-weight:600; }
+
+  @media (max-width:560px) {
+    body { font-size:15px; }
+    .page { padding:40px 20px 64px; }
+    h1 { font-size:26px; }
+    h2 { font-size:19px; }
+    .code pre { font-size:13px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Python 入門教學</h1>
+  <p class="lead">在 Windows 上安裝 Python、VSCode，寫第一支程式並打包成 .exe。</p>
+  <p class="meta">預計 15 分鐘 · 不需任何程式背景</p>
+
+  <h2><span class="num">01</span>安裝 Python</h2>
+  <p>到官網下載 Windows 安裝檔：<a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org/downloads</a>，按黃色按鈕下載並執行。</p>
+
+  <figure>
+    <svg viewBox="0 0 2894 1488" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Python 官網下載按鈕位置">
+      <image href="assets/01-python-download.png" x="0" y="0" width="2894" height="1488"/>
+      <!-- red circle around button -->
+      <ellipse cx="790" cy="635" rx="335" ry="65" fill="none" stroke="#d33" stroke-width="12"/>
+      <!-- white pill label to the right of the button -->
+      <rect x="1190" y="595" width="610" height="84" rx="42" fill="#fff" stroke="#d33" stroke-width="6"/>
+      <text x="1495" y="650" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="56" fill="#d33" font-weight="700">← 點這個黃色按鈕</text>
+    </svg>
+    <figcaption>進到 python.org 後，點 <b>Download Python install manager</b> 黃色按鈕。</figcaption>
+  </figure>
+
+  <p>下載完成後雙擊執行 <code>.msix</code> 檔案，會跳出下面這個視窗，按 <strong>Install Python</strong>。</p>
+
+  <figure>
+    <svg viewBox="0 0 1302 1016" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Install Python Install Manager 對話框">
+      <image href="assets/02-install-manager.png" x="0" y="0" width="1302" height="1016"/>
+      <!-- circle around Install Python button -->
+      <ellipse cx="868" cy="668" rx="140" ry="48" fill="none" stroke="#d33" stroke-width="8"/>
+      <!-- white pill label below -->
+      <rect x="640" y="780" width="460" height="64" rx="32" fill="#fff" stroke="#d33" stroke-width="5"/>
+      <text x="870" y="822" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="34" fill="#d33" font-weight="700">↑ 點 Install Python</text>
+    </svg>
+    <figcaption>跳出此視窗時，按 <b>Install Python</b> 開始安裝。</figcaption>
+  </figure>
+
+  <p>裝完後驗證。按 <code>Win + R</code>，輸入 <code>cmd</code>，貼入：</p>
+  <div class="code">
+    <div class="head"><span>cmd</span><button class="copy" data-copy="py --version">Copy</button></div>
+<pre>py --version</pre>
+  </div>
+  <p>顯示 <code>Python 3.x.x</code> 即成功。</p>
+
+  <h2><span class="num">02</span>安裝 VSCode</h2>
+  <p>下載並安裝（一路 Next）：<a href="https://code.visualstudio.com/" target="_blank" rel="noopener">code.visualstudio.com</a></p>
+  <p>打開後加裝 Python 擴充套件：</p>
+  <ol>
+    <li>左側欄點積木圖示（Extensions）。</li>
+    <li>搜尋 <strong>Python</strong>（作者 Microsoft），按 <strong>Install</strong>。</li>
+  </ol>
+
+  <figure>
+    <img src="assets/03-vscode-python-ext.png" alt="VSCode Python 擴充套件畫面" style="width:100%;display:block;">
+    <figcaption><b>步驟</b>：左側欄找到積木圖示（Extensions）→ 搜尋框打 <b>Python</b> → 找作者顯示 Microsoft 的那個 → 按藍色的 <b>Install</b>。</figcaption>
+  </figure>
+
+  <h2><span class="num">03</span>寫第一支程式</h2>
+  <ol>
+    <li>桌面建一個資料夾，例如 <code>my_python</code>。</li>
+    <li>VSCode → File → Open Folder → 選該資料夾（或直接按下面這顆藍色按鈕）。</li>
+    <li>新增檔案 <code>hello.py</code>，貼入以下程式碼。</li>
+  </ol>
+
+  <figure>
+    <svg viewBox="0 0 838 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VSCode Open Folder 按鈕">
+      <image href="assets/04-open-folder.png" x="0" y="0" width="838" height="1734"/>
+      <ellipse cx="395" cy="305" rx="270" ry="50" fill="none" stroke="#d33" stroke-width="6"/>
+      <rect x="180" y="395" width="430" height="60" rx="30" fill="#fff" stroke="#d33" stroke-width="4"/>
+      <text x="395" y="435" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="32" fill="#d33" font-weight="700">↑ 點 Open Folder</text>
+    </svg>
+    <figcaption>VSCode 的 EXPLORER 面板按 <b>Open Folder</b>，選您剛建的資料夾。</figcaption>
+  </figure>
+
+  <div class="code">
+    <div class="head"><span>hello.py</span><button class="copy" data-copy="a = int(input('請輸入第一個數字：'))
+b = int(input('請輸入第二個數字：'))
+
+print(a, '+', b, '=', a + b)
+
+input('\n按 Enter 結束...')">Copy</button></div>
+<pre>a = int(input('請輸入第一個數字：'))
+b = int(input('請輸入第二個數字：'))
+
+print(a, '+', b, '=', a + b)
+
+input('\n按 Enter 結束...')</pre>
+  </div>
+
+  <p>按右上角的 <strong>▶</strong> 執行，下方會跳出 Terminal 讓您輸入兩個數字，按 Enter 後就會印出加總結果。</p>
+
+  <figure>
+    <svg viewBox="0 0 1738 458" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VSCode 右上角執行鍵">
+      <image href="assets/05-vscode-run.png" x="0" y="0" width="1738" height="458"/>
+      <ellipse cx="1565" cy="44" rx="55" ry="35" fill="none" stroke="#d33" stroke-width="6"/>
+      <rect x="900" y="115" width="320" height="56" rx="28" fill="#fff" stroke="#d33" stroke-width="4"/>
+      <text x="1060" y="153" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="30" fill="#d33" font-weight="700">點這個 ▶ 執行</text>
+      <path d="M1230 130 Q 1380 110 1520 80" stroke="#d33" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M1510 70 L1530 80 L1510 92 Z" fill="#d33"/>
+    </svg>
+    <figcaption>右上角的 <b>▶</b> 三角形播放鍵 — 按下即執行 hello.py。</figcaption>
+  </figure>
+
+  <h2><span class="num">04</span>打包成 .exe</h2>
+  <p>在 Terminal 安裝 PyInstaller：</p>
+  <div class="code">
+    <div class="head"><span>terminal</span><button class="copy" data-copy="py -m pip install pyinstaller">Copy</button></div>
+<pre>py -m pip install pyinstaller</pre>
+  </div>
+
+  <p>打包：</p>
+  <div class="code">
+    <div class="head"><span>terminal</span><button class="copy" data-copy="py -m PyInstaller --onefile hello.py">Copy</button></div>
+<pre>py -m PyInstaller --onefile hello.py</pre>
+  </div>
+
+  <p>完成後打開 <code>dist</code> 資料夾，<strong>hello.exe</strong> 雙擊即可執行，可寄給沒裝 Python 的人。</p>
+
+  <h2><span class="num">05</span>疑難排解</h2>
+  <div class="faq">
+    <details>
+      <summary>指令找不到（"不是內部或外部命令"）</summary>
+      <p>確認您是用 <code>py -m ...</code> 的形式呼叫。例如打包用 <code>py -m PyInstaller --onefile hello.py</code>，安裝套件用 <code>py -m pip install &lt;套件名&gt;</code>。</p>
+    </details>
+    <details>
+      <summary>防毒把 exe 當病毒</summary>
+      <p>常見誤判。加白名單，或改用 <code>--onedir</code> 取代 <code>--onefile</code>。</p>
+    </details>
+    <details>
+      <summary>exe 為什麼那麼大（30 MB+）</summary>
+      <p>正常的，Python 直譯器一起被打包進去了。</p>
+    </details>
+    <details>
+      <summary>雙擊 exe 視窗一閃就消失</summary>
+      <p>程式末尾加 <code>input('Press Enter...')</code> 視窗就會停下來。</p>
+    </details>
+  </div>
+
+  <h2><span class="num">06</span>延伸資源</h2>
+  <div class="resources">
+    <a href="https://docs.python.org/zh-tw/3/tutorial/" target="_blank" rel="noopener">Python 官方中文教學<span class="arrow">→</span></a>
+    <a href="https://www.sympy.org/en/index.html" target="_blank" rel="noopener">SymPy（符號運算）<span class="arrow">→</span></a>
+    <a href="https://matplotlib.org/" target="_blank" rel="noopener">Matplotlib（繪圖）<span class="arrow">→</span></a>
+    <a href="https://numpy.org/" target="_blank" rel="noopener">NumPy（數值計算）<span class="arrow">→</span></a>
+    <a href="https://code.visualstudio.com/docs/python/python-tutorial" target="_blank" rel="noopener">VSCode × Python 手冊<span class="arrow">→</span></a>
+    <a href="https://jupyter.org/" target="_blank" rel="noopener">Jupyter Notebook<span class="arrow">→</span></a>
+  </div>
+
+
+</div>
+
+<script>
+  document.querySelectorAll('.copy').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+        const old = btn.textContent;
+        btn.textContent = 'Copied ✓'; btn.classList.add('ok');
+        setTimeout(() => { btn.textContent = old; btn.classList.remove('ok'); }, 1400);
+      } catch (e) { btn.textContent = 'Failed'; }
+    });
+  });
+</script>
+</body>
+</html>
